@@ -1,0 +1,828 @@
+/* ============================================
+   Calculadora de Valuation — estilos custom
+   ============================================ */
+
+/* ---------- Variáveis de tema ---------- */
+:root {
+  --bg-base: #020617;
+  --bg-elevated: #0f172a;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+  --text-dim: #475569;
+
+  --surface: rgba(255,255,255,0.04);
+  --surface-soft: rgba(255,255,255,0.025);
+  --surface-strong: rgba(255,255,255,0.08);
+  --border: rgba(255,255,255,0.08);
+  --border-soft: rgba(255,255,255,0.05);
+  --border-strong: rgba(255,255,255,0.18);
+
+  --accent-cyan: #06b6d4;
+  --accent-violet: #8b5cf6;
+  --accent-glow: rgba(34,211,238,0.4);
+
+  --shadow-card: 0 20px 60px -20px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 60px -10px rgba(34,211,238,0.45);
+
+  --hero-text-gradient: linear-gradient(135deg, #67e8f9, #ffffff, #c4b5fd);
+}
+
+html.light {
+  --bg-base: #f1f5f9;
+  --bg-elevated: #ffffff;
+  --text-primary: #020617;
+  --text-secondary: #1e293b;
+  --text-muted: #334155;
+  --text-faint: #475569;
+  --text-dim: #64748b;
+
+  --surface: rgba(255,255,255,0.9);
+  --surface-soft: rgba(255,255,255,0.7);
+  --surface-strong: #ffffff;
+  --border: rgba(15,23,42,0.1);
+  --border-soft: rgba(15,23,42,0.06);
+  --border-strong: rgba(15,23,42,0.18);
+
+  --shadow-card: 0 10px 40px -10px rgba(15,23,42,0.12);
+  --shadow-glow: 0 0 40px -10px rgba(6,182,212,0.25);
+
+  --hero-text-gradient: linear-gradient(135deg, #0891b2, #7c3aed);
+}
+
+html, body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "liga", "calt";
+}
+
+/* No light, font-smoothing antialiased deixa textos finos demais (sombras
+   subpixel cinzas se anulam contra fundo claro). Voltar para auto preserva
+   espessura visual real. */
+html.light {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+
+/* Títulos no light ganham um peso extra para nitidez */
+html.light h2,
+html.light h3,
+html.light h4,
+html.light .font-display { letter-spacing: -0.015em; }
+
+/* Background decorativo — versão light: gradient suave + blobs pastel */
+html.light body {
+  background-image:
+    radial-gradient(at 0% 0%, rgba(6,182,212,0.06) 0%, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(139,92,246,0.05) 0%, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(34,211,238,0.04) 0%, transparent 50%);
+}
+html.light .fixed.inset-0.-z-10 > div[class*="blur"] {
+  opacity: 0.2;
+  filter: blur(80px) saturate(1.5);
+}
+html.light .fixed.inset-0.-z-10 > div[class*="bg-\\[url"] {
+  opacity: 0;
+}
+
+/* Glassmorphism base */
+.glass {
+  background: linear-gradient(135deg, var(--surface), rgba(255,255,255,0.01));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+html.light .glass {
+  background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,255,255,0.88));
+  box-shadow: 0 12px 40px -10px rgba(15,23,42,0.12), 0 1px 0 rgba(255,255,255,0.5) inset;
+}
+
+.glass-soft {
+  background: var(--surface-soft);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-soft);
+}
+html.light .glass-soft {
+  background: rgba(255,255,255,0.75);
+  border-color: rgba(15,23,42,0.06);
+  box-shadow: 0 4px 16px -6px rgba(15,23,42,0.08);
+}
+
+/* Inputs base */
+.input-base {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  transition: all 0.2s;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.input-base::placeholder { color: var(--text-dim); }
+.input-base:focus {
+  outline: none;
+  border-color: rgba(6,182,212,0.6);
+  background-color: var(--surface-strong);
+  box-shadow: 0 0 0 4px rgba(6,182,212,0.1);
+}
+
+select.input-base {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%2394a3b8' d='M6 8L0 0h12z'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 1rem center !important;
+  background-size: 12px 8px !important;
+  padding-right: 2.5rem;
+}
+
+/* Fix: <option> nativas precisam ter cor explícita (browsers ignoram CSS do select pai) */
+select.input-base option {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 8px;
+}
+html.light select.input-base {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%2364748b' d='M6 8L0 0h12z'/></svg>") !important;
+}
+
+.input-currency {
+  position: relative;
+}
+.input-currency .prefix {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 1;
+  font-size: 0.95rem;
+}
+.input-currency .input-base {
+  padding-left: 3rem !important;
+}
+
+/* Radio card */
+.radio-card {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  transition: all 0.2s;
+  color: var(--text-primary);
+}
+.radio-card:hover {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+.radio-card:has(input:checked) {
+  border-color: rgba(6,182,212,0.6);
+  background: rgba(6,182,212,0.08);
+  box-shadow: 0 0 30px -10px rgba(34,211,238,0.3);
+}
+.radio-card:has(input:checked) .card-content::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #22d3ee, #8b5cf6);
+  box-shadow: 0 0 10px rgba(34,211,238,0.5);
+}
+.radio-card .card-content {
+  position: relative;
+  padding-right: 1.5rem;
+}
+
+/* Tooltip */
+.tooltip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: help;
+  font-style: normal;
+  vertical-align: middle;
+  transition: all 0.2s;
+}
+.tooltip:hover {
+  background: rgba(34,211,238,0.15);
+  color: #06b6d4;
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal.hidden { display: none; }
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2,6,23,0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+html.light .modal-backdrop { background: rgba(15,23,42,0.4); }
+.modal-content {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 2rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(2,6,23,0.95));
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  box-shadow: 0 25px 80px -20px rgba(0,0,0,0.7);
+}
+html.light .modal-content {
+  background: linear-gradient(135deg, #ffffff, #f8fafc);
+  box-shadow: 0 25px 80px -20px rgba(15,23,42,0.25);
+}
+
+/* Margin badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.badge-low {
+  background: rgba(251,146,60,0.12);
+  border-color: rgba(251,146,60,0.3);
+  color: #fb923c;
+}
+.badge-healthy {
+  background: rgba(34,197,94,0.12);
+  border-color: rgba(34,197,94,0.3);
+  color: #4ade80;
+}
+.badge-high {
+  background: rgba(16,185,129,0.15);
+  border-color: rgba(16,185,129,0.4);
+  color: #34d399;
+  box-shadow: 0 0 20px -5px rgba(16,185,129,0.4);
+}
+
+/* Slider custom */
+input[type="range"].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--surface-strong);
+  outline: none;
+}
+input[type="range"].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #22d3ee, #8b5cf6);
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(34,211,238,0.5);
+  border: 2px solid var(--bg-base);
+}
+input[type="range"].slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #22d3ee, #8b5cf6);
+  cursor: pointer;
+  border: 2px solid var(--bg-base);
+}
+
+/* ============================================
+   Botões de navegação do wizard
+   ============================================ */
+.btn-back, .btn-next {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0.7rem 1.4rem;
+  border-radius: 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.btn-back {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.btn-back:hover:not(:disabled) {
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.btn-back:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-next {
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+  color: #020617;
+  box-shadow: 0 8px 24px -8px rgba(34,211,238,0.5);
+}
+.btn-next:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px -8px rgba(34,211,238,0.6);
+}
+.btn-next:active {
+  transform: translateY(0);
+}
+
+/* ============================================
+   Sector grid (seletor de setor/tipo de negócio)
+   ============================================ */
+.sector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.sector-card {
+  position: relative;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 0.85rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: inherit;
+}
+.sector-card:hover {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.sector-card.active {
+  background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(139,92,246,0.15));
+  border-color: rgba(6,182,212,0.5);
+  color: var(--text-primary);
+  box-shadow: 0 0 25px -8px rgba(34,211,238,0.35);
+}
+html.light .sector-card.active {
+  background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(139,92,246,0.1));
+  color: #0e7490;
+}
+.sector-card .sector-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+.sector-card .sector-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+.sector-card.active .sector-desc {
+  color: var(--text-secondary);
+}
+.sector-card .sector-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.68rem;
+}
+.sector-card .sector-meta span {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+html.light .sector-card .sector-meta span {
+  background: rgba(15,23,42,0.05);
+}
+
+/* ============================================
+   Pill buttons (Momento da Empresa, Dependência dos Sócios)
+   ============================================ */
+.pill-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pill-grid-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.pill-btn {
+  padding: 10px 14px;
+  border-radius: 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s;
+  flex: 1;
+}
+.pill-btn:hover {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.pill-btn.active {
+  background: linear-gradient(135deg, rgba(6,182,212,0.18), rgba(139,92,246,0.18));
+  border-color: rgba(6,182,212,0.5);
+  color: #ecfeff;
+  box-shadow: 0 0 25px -8px rgba(34,211,238,0.4);
+}
+
+/* ============================================
+   Sidebar checklist
+   ============================================ */
+.sidebar {
+  background: linear-gradient(180deg, var(--surface-soft), rgba(255,255,255,0.01));
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-soft);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+}
+html.light .sidebar {
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 8px 28px -10px rgba(15,23,42,0.1);
+}
+.sidebar-section {
+  margin-bottom: 1.5rem;
+}
+.sidebar-section:last-child { margin-bottom: 0; }
+.sidebar-section-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #06b6d4;
+  margin-bottom: 0.75rem;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.sidebar-item.active {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.sidebar-item.done { color: var(--text-muted); }
+.sidebar-item.locked { color: var(--text-dim); cursor: not-allowed; }
+.sidebar-item .icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-item.active .icon { color: #06b6d4; }
+.sidebar-item.done .icon { color: #34d399; }
+
+/* ============================================
+   Segmented toggle (Mensal/Anual, Simples/Avançado)
+   ============================================ */
+.seg-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  gap: 2px;
+}
+.seg-btn {
+  padding: 6px 14px;
+  border-radius: 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: inherit;
+}
+.seg-btn:hover { color: var(--text-primary); }
+.seg-btn.active {
+  background: linear-gradient(135deg, rgba(6,182,212,0.18), rgba(139,92,246,0.18));
+  color: var(--text-primary);
+  box-shadow: 0 0 12px -2px rgba(34,211,238,0.3) inset;
+}
+html.light .seg-btn.active {
+  background: linear-gradient(135deg, rgba(6,182,212,0.2), rgba(139,92,246,0.2));
+  color: #0891b2;
+}
+
+/* ============================================
+   Slider de componente (% e R$ sincronizados)
+   ============================================ */
+.component-row {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-soft);
+}
+.component-row .row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.component-row .row-head label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.component-row .pct-pill {
+  font-family: 'Inter', monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: rgba(6,182,212,0.12);
+  color: #67e8f9;
+  border: 1px solid rgba(6,182,212,0.25);
+  min-width: 60px;
+  text-align: center;
+}
+.component-row .row-controls {
+  display: grid;
+  grid-template-columns: 1fr 130px;
+  gap: 10px;
+  align-items: center;
+}
+.component-row .money-input {
+  position: relative;
+}
+.component-row .money-input input {
+  width: 100%;
+  padding: 7px 10px 7px 26px;
+  border-radius: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+.component-row .money-input input:focus {
+  outline: none;
+  border-color: rgba(6,182,212,0.5);
+  background: var(--surface-strong);
+}
+.component-row .money-input .prefix-r {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* Animations */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.5s ease forwards; }
+
+/* Step panel display — fallback explícito (não depende de Tailwind) */
+.step-panel { display: block; }
+.step-panel.hidden { display: none !important; }
+.hidden { display: none !important; }
+
+/* ============================================
+   Overrides para classes Tailwind usadas no HTML/JS
+   ao trocar para tema light
+   ============================================ */
+
+/* Textos */
+html.light .text-slate-100,
+html.light .text-slate-200 { color: var(--text-primary) !important; }
+html.light .text-slate-300 { color: var(--text-secondary) !important; }
+html.light .text-slate-400 { color: var(--text-muted) !important; }
+html.light .text-slate-500 { color: var(--text-faint) !important; }
+html.light .text-slate-600 { color: var(--text-dim) !important; }
+
+/* Acentos coloridos: ajusta saturação no light */
+html.light .text-cyan-300,
+html.light .text-cyan-400 { color: #0891b2 !important; }
+html.light .text-violet-400,
+html.light .text-accent-400 { color: #7c3aed !important; }
+html.light .text-brand-300,
+html.light .text-brand-400 { color: #0891b2 !important; }
+html.light .text-emerald-300,
+html.light .text-emerald-400 { color: #059669 !important; }
+html.light .text-orange-400 { color: #ea580c !important; }
+html.light .text-rose-300,
+html.light .text-rose-400 { color: #dc2626 !important; }
+
+/* Bordas */
+html.light .border-white\/5,
+html.light .border-white\/10 { border-color: var(--border-soft) !important; }
+html.light .border-white\/20 { border-color: var(--border) !important; }
+
+/* Fundos translúcidos brancos → fundo claro elevado */
+html.light .bg-white\/\[0\.02\],
+html.light .bg-white\/\[0\.025\],
+html.light .bg-white\/\[0\.03\] {
+  background-color: rgba(15,23,42,0.025) !important;
+}
+html.light .bg-white\/5,
+html.light .bg-white\/\[0\.04\],
+html.light .bg-white\/\[0\.05\] {
+  background-color: rgba(15,23,42,0.05) !important;
+}
+html.light .bg-white\/10 {
+  background-color: rgba(15,23,42,0.08) !important;
+}
+html.light .hover\:bg-white\/5:hover,
+html.light .hover\:bg-white\/10:hover {
+  background-color: rgba(15,23,42,0.06) !important;
+}
+
+/* Tints coloridas dentro de cards (cyan/emerald/rose) */
+html.light .bg-cyan-500\/5,
+html.light .bg-cyan-500\/10 { background-color: rgba(6,182,212,0.08) !important; }
+html.light .border-cyan-500\/20,
+html.light .border-cyan-500\/30 { border-color: rgba(6,182,212,0.3) !important; }
+html.light .bg-rose-500\/10 { background-color: rgba(239,68,68,0.08) !important; }
+html.light .border-rose-500\/30 { border-color: rgba(239,68,68,0.3) !important; }
+html.light .bg-emerald-500\/10 { background-color: rgba(16,185,129,0.08) !important; }
+html.light .border-emerald-500\/30 { border-color: rgba(16,185,129,0.3) !important; }
+
+/* Botão "Exportar PDF" (gradient cyan/violet com tint) */
+html.light .from-brand-500\/20,
+html.light .from-cyan-500\/20 { --tw-gradient-from: rgba(6,182,212,0.15) !important; }
+html.light .to-accent-500\/20,
+html.light .to-violet-500\/20 { --tw-gradient-to: rgba(139,92,246,0.15) !important; }
+
+/* Tooltip flutuante */
+html.light #tooltip-floater {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 8px 24px -8px rgba(15,23,42,0.2);
+}
+
+/* Header */
+html.light header.relative.z-10 {
+  background: rgba(255,255,255,0.7) !important;
+  border-bottom-color: var(--border) !important;
+}
+
+/* Hero text gradient (no dashboard) — adapta para light */
+html.light #hero-low,
+html.light #hero-high {
+  background: var(--hero-text-gradient) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+}
+
+/* Hero geral (h2 da landing) — no light, cor sólida escura para nitidez máxima.
+   Gradient text + bg-clip não renderiza tão nítido em telas LCD com fundo claro. */
+html.light .bg-gradient-to-br.from-white.via-slate-200.to-slate-400 {
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  background-clip: initial !important;
+  color: #0f172a !important;
+}
+
+/* Badge da hero ("5 metodologias…") */
+html.light .from-white\/5 { background: rgba(15,23,42,0.04) !important; }
+
+/* Footer */
+html.light footer { color: var(--text-faint) !important; }
+
+/* Badges de margem mantêm cores mas com fundos um pouco mais opacos */
+html.light .badge-low {
+  background: rgba(251,146,60,0.18);
+  color: #c2410c;
+}
+html.light .badge-healthy {
+  background: rgba(34,197,94,0.18);
+  color: #15803d;
+}
+html.light .badge-high {
+  background: rgba(16,185,129,0.2);
+  color: #047857;
+}
+
+/* Radio card com check (radio-card:has(input:checked)) — ajusta cor de destaque */
+html.light .radio-card:has(input:checked) {
+  background: rgba(6,182,212,0.08);
+}
+
+/* Pill button ativa no light tem fundo mais sólido */
+html.light .pill-btn.active {
+  background: linear-gradient(135deg, rgba(6,182,212,0.12), rgba(139,92,246,0.12));
+  border-color: rgba(6,182,212,0.5);
+  color: #0e7490;
+}
+
+/* Pill pill (% no slider de receita recorrente) */
+html.light .pct-pill {
+  background: rgba(6,182,212,0.1);
+  color: #0e7490;
+  border-color: rgba(6,182,212,0.3);
+}
+
+/* Botão "Avançar" — sombra mais sutil no light */
+html.light .btn-next {
+  box-shadow: 0 6px 20px -6px rgba(6,182,212,0.4);
+}
+
+/* Toasts e elementos com bg-ink-900 (cor customizada Tailwind) */
+html.light .bg-ink-900\/95,
+html.light .bg-ink-900 {
+  background-color: #ffffff !important;
+  color: var(--text-primary) !important;
+}
+
+/* Tema-toggle */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.theme-toggle:hover {
+  background: var(--surface-strong);
+  color: var(--text-primary);
+}
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: block; }
+html.light .theme-toggle .icon-sun { display: block; }
+html.light .theme-toggle .icon-moon { display: none; }
+
+@media print {
+  body { background: white !important; color: black !important; }
+  .glass { background: white !important; border-color: #ddd !important; }
+}
