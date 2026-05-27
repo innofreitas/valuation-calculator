@@ -57,9 +57,16 @@ export function closeModal(id) {
 }
 
 export function initModalCloseHandlers() {
+  const close = (m) => {
+    m.classList.add('hidden');
+    // Só destrava o scroll se NENHUM outro modal continuar aberto
+    if (!document.querySelector('.modal:not(.hidden)')) {
+      document.body.style.overflow = '';
+    }
+  };
   document.querySelectorAll('.modal').forEach(m => {
-    m.querySelector('.modal-backdrop').addEventListener('click', () => m.classList.add('hidden'));
-    m.querySelector('.modal-close').addEventListener('click', () => m.classList.add('hidden'));
+    m.querySelector('.modal-backdrop').addEventListener('click', () => close(m));
+    m.querySelector('.modal-close').addEventListener('click', () => close(m));
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

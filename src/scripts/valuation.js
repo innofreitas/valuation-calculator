@@ -66,7 +66,7 @@ export const SECTOR_PRESETS = {
   },
 };
 
-export const DEFAULT_SECTOR = 'edtech_subscription';
+export const DEFAULT_SECTOR = 'ead_hybrid';
 
 /**
  * Resolve preset a partir do input (ou fallback).
