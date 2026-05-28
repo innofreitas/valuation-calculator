@@ -14,6 +14,8 @@ import {
   getSectorPreset,
   COMPANY_MOMENTS,
   DEFAULT_PARAMS,
+  digitalMetricsModifier,
+  ltvCacTier,
 } from './valuation.js';
 import {
   saveCustomPreset, loadCustomPreset, clearCustomPreset,
@@ -35,15 +37,16 @@ const COMPONENT_META = {
 const STEP_LABELS = {
   1: 'Perfil & Setor',
   2: 'Riscos & Maturidade',
-  3: 'Financeiro',
-  4: 'Patrimônio',
-  5: 'Resultados',
+  3: 'Métricas digitais',
+  4: 'Financeiro',
+  5: 'Patrimônio',
+  6: 'Resultados',
 };
 
 export class Wizard {
   constructor({ onComplete }) {
     this.current = 1;
-    this.total = 5;
+    this.total = 6;
     this.onComplete = onComplete;
     // Carrega padrões salvos (se existirem)
     const savedCustom = loadCustomPreset();
@@ -61,6 +64,7 @@ export class Wizard {
       companyMoment: 'growing_fast',
       trademark: false,
       age: '1to3',
+      digitalMetrics: { ltv: null, cac: null, monthlyChurn: null },
       revenue: 0,
       ebitda: 0,
       netIncome: 0,
@@ -162,6 +166,9 @@ export class Wizard {
         toast(`Restaurado para ${Math.round(preset.defaultRecurringRatio*100)}% (padrão do setor ${preset.label})`, { type: 'info' });
       }
     });
+
+    // Passo 3: Métricas digitais (LTV, CAC, Churn)
+    this._initDigitalMetrics();
 
     // Toggles do passo financeiro
     document.querySelectorAll('[data-period]').forEach(btn => {
@@ -712,8 +719,8 @@ export class Wizard {
   }
 
   _validateCurrent() {
-    // Financeiro agora é o passo 3
-    if (this.current === 3) {
+    // Financeiro agora é o passo 4 (após Métricas digitais)
+    if (this.current === 4) {
       const { components, financeMode, revenue } = this.state;
       const operacionais = financeMode === 'simple'
         ? (components.custoDespesas ?? 0)
@@ -806,6 +813,90 @@ export class Wizard {
     }
   }
 
+  // ============================================
+  // Métricas digitais (LTV, CAC, Churn)
+  // ============================================
+  _initDigitalMetrics() {
+    ['m-ltv', 'm-cac'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      attachCurrencyMask(el);
+      el.addEventListener('input', () => this._syncDigitalMetrics());
+    });
+    const $churn = document.getElementById('m-churn');
+    if ($churn) {
+      $churn.addEventListener('input', () => this._syncDigitalMetrics());
+    }
+    document.getElementById('btn-metrics-clear')?.addEventListener('click', () => {
+      document.getElementById('m-ltv').value = '';
+      document.getElementById('m-cac').value = '';
+      document.getElementById('m-churn').value = 0;
+      this.state.digitalMetrics = { ltv: null, cac: null, monthlyChurn: null };
+      this._updateDigitalMetricsDisplay();
+      toast('Métricas removidas — não afetam mais o cálculo', { type: 'info' });
+    });
+    this._updateDigitalMetricsDisplay();
+  }
+
+  _syncDigitalMetrics() {
+    const ltv = parseCurrency(document.getElementById('m-ltv'));
+    const cac = parseCurrency(document.getElementById('m-cac'));
+    const churnPct = parseFloat(document.getElementById('m-churn')?.value);
+    // null se vazio/zero (não força modificador quando usuário não informou)
+    this.state.digitalMetrics = {
+      ltv: ltv > 0 ? ltv : null,
+      cac: cac > 0 ? cac : null,
+      monthlyChurn: Number.isFinite(churnPct) && churnPct > 0 ? churnPct / 100 : null,
+    };
+    this._updateDigitalMetricsDisplay();
+  }
+
+  _updateDigitalMetricsDisplay() {
+    const m = this.state.digitalMetrics;
+    const $churnDisp = document.getElementById('m-churn-display');
+    if ($churnDisp) {
+      $churnDisp.textContent = m.monthlyChurn !== null
+        ? `${(m.monthlyChurn * 100).toFixed(1)}%`
+        : '—';
+    }
+
+    const $ltvcacDisp = document.getElementById('m-ltvcac-display');
+    const $ltvcacTier = document.getElementById('m-ltvcac-tier');
+    if ($ltvcacDisp && $ltvcacTier) {
+      if (m.ltv && m.cac && m.cac > 0) {
+        const ratio = m.ltv / m.cac;
+        const tier = ltvCacTier(ratio);
+        $ltvcacDisp.textContent = `${ratio.toFixed(2)}×`;
+        const color = !tier ? 'text-slate-500'
+                    : tier.modifier > 0 ? 'text-emerald-400'
+                    : tier.modifier < 0 ? 'text-orange-400'
+                    : 'text-slate-400';
+        $ltvcacTier.className = `text-xs mt-0.5 ${color}`;
+        $ltvcacTier.textContent = tier ? tier.label : '';
+      } else {
+        $ltvcacDisp.textContent = '—';
+        $ltvcacTier.textContent = 'Informe LTV e CAC';
+        $ltvcacTier.className = 'text-xs text-slate-500 mt-0.5';
+      }
+    }
+
+    const $modDisp = document.getElementById('m-modifier-display');
+    const $modTier = document.getElementById('m-modifier-tier');
+    if ($modDisp && $modTier) {
+      const mod = digitalMetricsModifier(m);
+      const hasMetrics = m.ltv || m.cac || m.monthlyChurn !== null;
+      const sign = mod > 0 ? '+' : '';
+      $modDisp.textContent = hasMetrics ? `${sign}${(mod * 100).toFixed(1)} p.p.` : '0%';
+      const color = mod > 0 ? 'text-emerald-400' : mod < 0 ? 'text-orange-400' : 'text-slate-200';
+      $modDisp.className = `font-display font-bold text-xl ${color}`;
+      $modTier.textContent = hasMetrics
+        ? (mod > 0 ? 'Puxa o múltiplo pro topo da faixa'
+        :  mod < 0 ? 'Puxa o múltiplo pro piso da faixa'
+        :           'Neutro — sem ajuste')
+        : 'Métricas não informadas';
+    }
+  }
+
   reset() {
     this.current = 1;
     this._render();
@@ -854,6 +945,17 @@ export class Wizard {
 
     this.state.trademark = state.trademark === true;
     setActivePill('trademark', this.state.trademark ? 'yes' : 'no');
+
+    // Métricas digitais
+    this.state.digitalMetrics = state.digitalMetrics || { ltv: null, cac: null, monthlyChurn: null };
+    const dm = this.state.digitalMetrics;
+    const $ltv = document.getElementById('m-ltv');
+    const $cac = document.getElementById('m-cac');
+    const $churn = document.getElementById('m-churn');
+    if ($ltv) $ltv.value = dm.ltv ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(dm.ltv) : '';
+    if ($cac) $cac.value = dm.cac ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(dm.cac) : '';
+    if ($churn) $churn.value = dm.monthlyChurn !== null ? (dm.monthlyChurn * 100).toFixed(1) : 0;
+    this._updateDigitalMetricsDisplay();
 
     document.getElementById('age').value = state.age || '1to3';
 

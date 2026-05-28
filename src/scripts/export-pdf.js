@@ -2,13 +2,17 @@
 // Exportação de PDF e share via URL
 // ============================================
 
-import { METHOD_META, effectivePreset, SECTOR_PRESETS } from './valuation.js';
+import {
+  METHOD_META, effectivePreset, SECTOR_PRESETS, calcDCFDetailed,
+  digitalMetricsModifier, ltvCacTier, churnTier,
+  simplifiedValuation, SIMPLIFIED_MULTIPLES,
+} from './valuation.js';
 import { formatBRL, formatBRLFull, formatPercent, encodeState } from './utils.js';
 
 export async function exportPDF(calc) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const { consolidated, range, margin, methods, inputs, params } = calc;
+  const { consolidated, range, margin, health, methods, inputs, params } = calc;
 
   const pageW = doc.internal.pageSize.getWidth();
   const margin_ = 48;
@@ -107,6 +111,26 @@ export async function exportPDF(calc) {
     ['Momento da empresa', momentLabels[inputs.companyMoment] || '—'],
     ['Marca registrada', inputs.trademark ? 'Sim (+5%)' : 'Não'],
     ['Tempo de mercado', inputs.age === 'lt1' ? '< 1 ano' : inputs.age === '1to3' ? '1 a 3 anos' : '> 3 anos'],
+    ...(inputs.digitalMetrics?.ltv && inputs.digitalMetrics?.cac
+      ? [(() => {
+          const ratio = inputs.digitalMetrics.ltv / inputs.digitalMetrics.cac;
+          const tier = ltvCacTier(ratio);
+          return ['LTV / CAC', `${ratio.toFixed(2)}× (${tier?.label || '—'})`];
+        })()]
+      : []),
+    ...(typeof inputs.digitalMetrics?.monthlyChurn === 'number'
+      ? [(() => {
+          const tier = churnTier(inputs.digitalMetrics.monthlyChurn);
+          return ['Churn mensal', `${(inputs.digitalMetrics.monthlyChurn*100).toFixed(1)}% (${tier?.label || '—'})`];
+        })()]
+      : []),
+    ...((inputs.digitalMetrics?.ltv || inputs.digitalMetrics?.cac || typeof inputs.digitalMetrics?.monthlyChurn === 'number')
+      ? [(() => {
+          const mod = digitalMetricsModifier(inputs.digitalMetrics);
+          const sign = mod > 0 ? '+' : '';
+          return ['Ajuste por métricas digitais', `${sign}${(mod*100).toFixed(1)} p.p. na interpolação dos múltiplos`];
+        })()]
+      : []),
     ['Faturamento anual', formatBRL(inputs.revenue)],
     ['EBITDA anual', formatBRL(inputs.ebitda)],
     ['Investimento inicial', formatBRL(inputs.investment)],
@@ -140,6 +164,36 @@ export async function exportPDF(calc) {
   y += msgLines.length * 12 + 14;
   doc.setTextColor(20);
 
+  // Score de Saúde do Negócio
+  if (health) {
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Score de Saúde do Negócio', margin_, y);
+    y += 18;
+    doc.setFontSize(20);
+    // Cor por tier — hex → RGB simples
+    const hex = health.tier.color.replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    doc.setTextColor(r, g, b);
+    doc.text(`${health.score}/100`, margin_, y);
+    doc.setFontSize(11);
+    doc.text(`[${health.tier.label}]`, margin_ + 90, y);
+    y += 20;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(110);
+    health.breakdown.forEach(c => {
+      const label = c.missing ? `${c.label} (não informado)` : c.label;
+      doc.text(`   ${label}`, margin_, y);
+      doc.text(`${c.score}/100 · peso ${c.weight}%`, pageW - margin_ - 130, y);
+      y += 12;
+    });
+    y += 10;
+    doc.setTextColor(20);
+  }
+
   // Métodos
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
@@ -147,6 +201,10 @@ export async function exportPDF(calc) {
   y += 18;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
+  const dcfDetailed = calcDCFDetailed(inputs.ebitda, {
+    wacc: params.wacc, growth: params.growth, years: params.dcfYears, terminalGrowth: params.terminalGrowth,
+  });
+
   Object.entries(METHOD_META).forEach(([key, meta]) => {
     const val = methods[key];
     const contrib = val * meta.weight;
@@ -157,7 +215,68 @@ export async function exportPDF(calc) {
     doc.setTextColor(120);
     doc.text(`→ ${formatBRL(contrib)}`, pageW - margin_ - 70, y);
     y += 16;
+
+    // Decomposição do DCF: VP operacional + Valor Terminal
+    if (key === 'dcf' && val > 0) {
+      doc.setFontSize(9);
+      doc.setTextColor(110);
+      const opShare = (dcfDetailed.operationalPV / dcfDetailed.total) * 100;
+      const vtShare = dcfDetailed.terminalShare * 100;
+      doc.text(`   • VP dos 5 anos: ${formatBRL(dcfDetailed.operationalPV)} (${opShare.toFixed(0)}%)`, margin_, y);
+      y += 12;
+      doc.text(`   • Valor Terminal (perpetuidade ${(params.terminalGrowth*100).toFixed(1)}%): ${formatBRL(dcfDetailed.terminalPV)} (${vtShare.toFixed(0)}%)`, margin_, y);
+      y += 14;
+      doc.setFontSize(10);
+    }
   });
+
+  // Comparação simplificada: Valuation = Lucro Líquido × Múltiplo
+  const sv = simplifiedValuation(inputs.netIncome);
+  y += 8;
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(20);
+  doc.text('Comparação rápida — fórmula simplificada do mercado', margin_, y);
+  y += 16;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(110);
+  doc.text(`Regra prática: Valuation = Lucro Líquido Anual × Múltiplo (${SIMPLIFIED_MULTIPLES.low}x a ${SIMPLIFIED_MULTIPLES.high}x). Apresentada apenas como referência —`, margin_, y);
+  y += 11;
+  doc.text('NÃO entra na consolidação ponderada dos 5 métodos.', margin_, y);
+  y += 16;
+
+  if (sv.available) {
+    doc.setFontSize(10);
+    doc.setTextColor(60);
+    doc.text(`Lucro Líquido Anual: ${formatBRL(inputs.netIncome)}`, margin_, y);
+    y += 14;
+    doc.setTextColor(20);
+    doc.text(`   • Conservador (${SIMPLIFIED_MULTIPLES.low}x): ${formatBRL(sv.low)}`, margin_, y);
+    y += 12;
+    doc.setTextColor(8, 145, 178);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`   • Mediana (${SIMPLIFIED_MULTIPLES.mid}x):    ${formatBRL(sv.mid)}`, margin_, y);
+    y += 12;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(20);
+    doc.text(`   • Otimista (${SIMPLIFIED_MULTIPLES.high}x):    ${formatBRL(sv.high)}`, margin_, y);
+    y += 14;
+
+    const ratio = consolidated.final > 0 ? sv.mid / consolidated.final : 0;
+    const diffMsg = ratio > 1.2 ? 'mais otimista que o cálculo formal'
+                  : ratio < 0.8 ? 'mais conservadora que o cálculo formal'
+                  : 'alinhada com o cálculo formal';
+    doc.setFontSize(9);
+    doc.setTextColor(110);
+    doc.text(`A faixa simplificada está ${diffMsg} (mediana = ${(ratio*100).toFixed(0)}% do valor central R$ ${formatBRL(consolidated.final)}).`, margin_, y);
+    y += 14;
+  } else {
+    doc.setFontSize(10);
+    doc.setTextColor(110);
+    doc.text('Sem lucro líquido positivo, a fórmula simplificada não se aplica.', margin_, y);
+    y += 14;
+  }
 
   // Footer
   doc.setFontSize(8);
@@ -165,8 +284,26 @@ export async function exportPDF(calc) {
   const footerY = doc.internal.pageSize.getHeight() - 30;
   doc.text('Relatório educacional gerado pela Calculadora de Valuation. Não substitui análise profissional de Fusões e Aquisições (M&A).', margin_, footerY);
 
-  const filename = `valuation-${new Date().toISOString().split('T')[0]}.pdf`;
+  const date = new Date().toISOString().split('T')[0];
+  const slug = slugify(inputs.companyName);
+  const filename = slug
+    ? `valuation-${slug}-${date}.pdf`
+    : `valuation-${date}.pdf`;
   doc.save(filename);
+}
+
+/**
+ * Converte nome da empresa em slug seguro para filename:
+ * remove acentos, trocar não-alfanuméricos por hífen, limita 50 chars.
+ */
+function slugify(name) {
+  if (!name || typeof name !== 'string') return '';
+  return name
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
 }
 
 /**

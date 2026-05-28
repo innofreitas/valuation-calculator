@@ -697,6 +697,80 @@ html.light .seg-btn.active {
   pointer-events: none;
 }
 
+/* ============================================
+   Health Score — medidor circular
+   ============================================ */
+.health-gauge {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  flex-shrink: 0;
+}
+.health-gauge svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.health-gauge .gauge-track {
+  fill: none;
+  stroke: rgba(255,255,255,0.06);
+  stroke-width: 12;
+}
+html.light .health-gauge .gauge-track {
+  stroke: rgba(15,23,42,0.08);
+}
+.health-gauge .gauge-fill {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out, stroke 0.3s ease;
+}
+.health-gauge .gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.health-gauge .gauge-value {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-weight: 800;
+  font-size: 2.8rem;
+  line-height: 1;
+}
+.health-gauge .gauge-of {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.health-component-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 0.82rem;
+}
+.health-component-row .bar-track {
+  position: relative;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+html.light .health-component-row .bar-track {
+  background: rgba(15,23,42,0.08);
+}
+.health-component-row .bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 9999px;
+  transition: width 0.7s ease, background 0.3s ease;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }

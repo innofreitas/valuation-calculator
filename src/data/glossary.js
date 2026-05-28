@@ -15,7 +15,7 @@ export const GLOSSARY = [
   },
   {
     term: 'DCF (Fluxo de Caixa Descontado)',
-    def: 'Projeta os lucros futuros da empresa (aqui, 5 anos) e os “traz a valor presente” usando uma taxa de desconto (WACC). É o método mais usado em Fusões e Aquisições (M&A).',
+    def: 'Projeta os lucros futuros da empresa (aqui, 5 anos) e os “traz a valor presente” usando uma taxa de desconto (WACC). Inclui também o Valor Terminal (perpetuidade de Gordon a 3% a.a.), que representa o valor da empresa continuando a operar depois do horizonte. É o método mais usado em Fusões e Aquisições (M&A).',
   },
   {
     term: 'WACC',

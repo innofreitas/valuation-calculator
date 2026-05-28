@@ -4,7 +4,8 @@
 
 import {
   fullCalculation, METHOD_META, DEFAULT_PARAMS, initialGrowthFor,
-  effectivePreset, revenueMultipleFor, ebitdaMultipleFor,
+  effectivePreset, revenueMultipleFor, ebitdaMultipleFor, calcDCFDetailed,
+  digitalMetricsModifier, simplifiedValuation, SIMPLIFIED_MULTIPLES,
 } from './valuation.js';
 import { formatBRL, formatBRLFull, formatPercent } from './utils.js';
 import { BENCHMARKS, TIPS } from '../data/glossary.js';
@@ -100,6 +101,12 @@ export class Dashboard {
           </div>
         </div>
 
+        <!-- Score de Saúde do Negócio -->
+        ${this._renderHealthCard()}
+
+        <!-- Comparação simplificada do mercado: Lucro Líquido × Múltiplo -->
+        ${this._renderSimplifiedCard()}
+
         <!-- Sensitivity Sliders -->
         ${this._renderSensitivityCard()}
 
@@ -174,20 +181,186 @@ export class Dashboard {
     this._bindActions();
   }
 
+  _renderHealthCard() {
+    const { health } = this.calc;
+    const { score, tier, breakdown } = health;
+    // Stroke dashoffset para o medidor: circunferência = 2π × raio (70 aqui)
+    const R = 70;
+    const C = 2 * Math.PI * R;
+    const offset = C * (1 - score / 100);
+
+    // Top 3 forças e fraquezas (ignora missing pra não confundir)
+    const informed = breakdown.filter(c => !c.missing);
+    const strengths = [...informed].filter(c => c.score >= 70).sort((a,b) => b.score - a.score).slice(0, 3);
+    const weaknesses = [...informed].filter(c => c.score < 55).sort((a,b) => a.score - b.score).slice(0, 3);
+    const missing = breakdown.filter(c => c.missing);
+
+    const componentRow = (c) => {
+      const color = c.score >= 80 ? '#10b981'
+                  : c.score >= 60 ? '#22d3ee'
+                  : c.score >= 40 ? '#f59e0b'
+                  : '#ef4444';
+      return `
+        <div class="health-component-row">
+          <div>
+            <div class="text-slate-300 mb-1.5 flex items-center justify-between gap-2">
+              <span>${c.label}${c.missing ? ' <span class="text-slate-600 text-xs">(não informado)</span>' : ''}</span>
+              <span class="font-mono text-xs" style="color:${color}">${c.score}/100</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width:${c.score}%; background:${color}"></div>
+            </div>
+          </div>
+          <div class="text-[10px] text-slate-500 self-end pb-1 whitespace-nowrap">${c.weight}%</div>
+        </div>
+      `;
+    };
+
+    return `
+      <div class="glass-soft rounded-2xl p-5 md:p-6 fade-up">
+        <div class="flex items-center gap-2 mb-4 flex-wrap">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="${tier.color}" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <h4 class="font-display font-semibold">Score de Saúde do Negócio</h4>
+          <span class="tooltip" data-tip="Índice 0-100 que combina margem EBITDA, LTV/CAC, churn, momento, dependência dos sócios e recorrência. Diagnostica a saúde do negócio independente do valuation absoluto."></span>
+        </div>
+
+        <div class="grid md:grid-cols-[200px_1fr] gap-6 items-start">
+          <!-- Medidor circular -->
+          <div class="flex justify-center md:justify-start">
+            <div class="health-gauge">
+              <svg viewBox="0 0 160 160">
+                <circle class="gauge-track" cx="80" cy="80" r="${R}"/>
+                <circle class="gauge-fill"  cx="80" cy="80" r="${R}"
+                        stroke="${tier.color}"
+                        stroke-dasharray="${C}"
+                        stroke-dashoffset="${offset}"/>
+              </svg>
+              <div class="gauge-center">
+                <div class="gauge-value" style="color:${tier.color}">${score}</div>
+                <div class="gauge-of">de 100</div>
+                <div class="text-xs font-semibold mt-1" style="color:${tier.color}">${tier.label}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Breakdown -->
+          <div>
+            <div class="text-xs text-slate-400 uppercase tracking-wider mb-2">Componentes</div>
+            <div>${breakdown.map(componentRow).join('')}</div>
+          </div>
+        </div>
+
+        ${strengths.length || weaknesses.length ? `
+          <div class="grid md:grid-cols-2 gap-4 mt-5 pt-4 border-t border-white/5">
+            ${strengths.length ? `
+              <div>
+                <div class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">💪 Forças</div>
+                <ul class="space-y-1 text-sm text-slate-300">
+                  ${strengths.map(c => `<li>• ${c.label} <span class="text-emerald-400 font-mono text-xs">(${c.score})</span></li>`).join('')}
+                </ul>
+              </div>` : '<div></div>'}
+            ${weaknesses.length ? `
+              <div>
+                <div class="text-xs uppercase tracking-wider text-orange-400 font-semibold mb-2">⚠ Pontos de atenção</div>
+                <ul class="space-y-1 text-sm text-slate-300">
+                  ${weaknesses.map(c => `<li>• ${c.label} <span class="text-orange-400 font-mono text-xs">(${c.score})</span></li>`).join('')}
+                </ul>
+              </div>` : '<div></div>'}
+          </div>` : ''}
+
+        ${missing.length ? `
+          <div class="mt-3 text-xs text-slate-500">
+            💡 Informar ${missing.map(c => `<strong class="text-slate-400">${c.label}</strong>`).join(' e ')} (passo Métricas digitais) refina o score.
+          </div>` : ''}
+      </div>
+    `;
+  }
+
+  _renderSimplifiedCard() {
+    const netIncome = this.state.netIncome ?? 0;
+    const sv = simplifiedValuation(netIncome);
+    const { final } = this.calc.consolidated;
+
+    if (!sv.available) {
+      return `
+        <div class="glass-soft rounded-2xl p-5 md:p-6 fade-up">
+          <div class="flex items-center gap-2 mb-2">
+            <h4 class="font-display font-semibold">Comparação rápida — fórmula simplificada do mercado</h4>
+            <span class="tooltip" data-tip="Regra prática usada por compradores informais: Valuation = Lucro Líquido Anual × Múltiplo. Equivale a 24–48 meses de lucro. Mostrada apenas como referência — não entra na consolidação dos 5 métodos."></span>
+          </div>
+          <p class="text-xs text-slate-500">
+            Sem lucro líquido positivo, a fórmula simplificada não se aplica.
+          </p>
+        </div>
+      `;
+    }
+
+    // Diferença percentual entre a faixa simplificada e o valuation final
+    const ratio = final > 0 ? (sv.mid / final) : 0;
+    const diffMsg = ratio > 1.2 ? 'mais otimista'
+                  : ratio < 0.8 ? 'mais conservadora'
+                  : 'alinhada com o cálculo detalhado';
+    const diffColor = ratio > 1.2 ? 'text-emerald-400'
+                    : ratio < 0.8 ? 'text-orange-400'
+                    : 'text-slate-400';
+
+    return `
+      <div class="glass-soft rounded-2xl p-5 md:p-6 fade-up">
+        <div class="flex items-center gap-2 mb-1 flex-wrap">
+          <h4 class="font-display font-semibold">Comparação rápida — fórmula simplificada do mercado</h4>
+          <span class="tooltip" data-tip="Regra prática usada por compradores informais: Valuation = Lucro Líquido Anual × Múltiplo. Equivale a 24–48 meses de lucro. Mostrada apenas como referência — não entra na consolidação dos 5 métodos."></span>
+        </div>
+        <p class="text-xs text-slate-400 mb-4">
+          <code class="text-slate-300">Valuation = Lucro Líquido Anual × Múltiplo</code> · Faixa típica de mercado: <strong>${SIMPLIFIED_MULTIPLES.low}×</strong> a <strong>${SIMPLIFIED_MULTIPLES.high}×</strong>
+        </p>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Conservador (${SIMPLIFIED_MULTIPLES.low}×)</div>
+            <div class="font-display font-bold text-lg text-slate-300">${formatBRL(sv.low, { compact: true })}</div>
+          </div>
+          <div class="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/30 text-center">
+            <div class="text-[10px] uppercase tracking-wider text-cyan-300 mb-1">Mediana (${SIMPLIFIED_MULTIPLES.mid}×)</div>
+            <div class="font-display font-bold text-lg text-cyan-300">${formatBRL(sv.mid, { compact: true })}</div>
+          </div>
+          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Otimista (${SIMPLIFIED_MULTIPLES.high}×)</div>
+            <div class="font-display font-bold text-lg text-slate-300">${formatBRL(sv.high, { compact: true })}</div>
+          </div>
+        </div>
+
+        <div class="mt-3 text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+          <span>Lucro líquido anual usado:</span>
+          <strong class="text-slate-300">${formatBRL(netIncome)}</strong>
+          <span class="text-slate-600">·</span>
+          <span>A faixa simplificada está <span class="${diffColor} font-medium">${diffMsg}</span> (mediana ${(ratio*100).toFixed(0)}% do valor central).</span>
+        </div>
+      </div>
+    `;
+  }
+
   _renderSensitivityCard() {
     const preset = effectivePreset(this.state);
     const ratio = typeof this.state.recurringRatio === 'number' ? this.state.recurringRatio : 1;
     const manualRev = this.state.manualMultiples?.revenue;
     const manualEb = this.state.manualMultiples?.ebitda;
-    const currentRev = revenueMultipleFor(ratio, preset, manualRev);
-    const currentEb = ebitdaMultipleFor(ratio, preset, manualEb);
+    const metricsMod = digitalMetricsModifier(this.state.digitalMetrics);
+    const currentRev = revenueMultipleFor(ratio, preset, manualRev, metricsMod);
+    const currentEb = ebitdaMultipleFor(ratio, preset, manualEb, metricsMod);
+    const metricsChip = metricsMod !== 0
+      ? `<span class="ml-2 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${metricsMod > 0 ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30' : 'bg-orange-500/10 text-orange-300 border border-orange-500/30'}">
+           métricas: ${metricsMod > 0 ? '+' : ''}${(metricsMod * 100).toFixed(1)} p.p.
+           <span class="tooltip" data-tip="Ajuste aplicado pelas métricas digitais (LTV/CAC e Churn) — desloca a interpolação do múltiplo dentro da faixa do setor."></span>
+         </span>`
+      : '';
 
     return `
       <div class="glass-soft rounded-2xl p-5 md:p-6 fade-up">
         <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <svg class="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             <h4 class="font-display font-semibold">Premissas usadas no cálculo</h4>
+            ${metricsChip}
           </div>
           <button id="btn-edit-premises" class="text-xs px-3 py-1 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 transition">
             ✎ Editar no passo 1
@@ -230,10 +403,38 @@ export class Dashboard {
     const $list = document.getElementById('methods-list');
     const max = Math.max(...Object.values(methods), 1);
 
+    // Decomposição do DCF: VP operacional + Valor Terminal
+    const dcfDetailed = calcDCFDetailed(this.state.ebitda, {
+      wacc: this.params.wacc,
+      growth: this.params.growth,
+      years: this.params.dcfYears,
+      terminalGrowth: this.params.terminalGrowth,
+    });
+
     $list.innerHTML = Object.entries(METHOD_META).map(([key, meta]) => {
       const val = methods[key];
       const contribution = val * meta.weight;
       const widthPct = (val / max) * 100;
+
+      // Linha extra para DCF mostrando decomposição
+      let extraBreakdown = '';
+      if (key === 'dcf' && val > 0) {
+        const opShare = (dcfDetailed.operationalPV / dcfDetailed.total) * 100;
+        const vtShare = dcfDetailed.terminalShare * 100;
+        extraBreakdown = `
+          <div class="mt-2 pt-2 border-t border-white/5 text-[11px] space-y-0.5">
+            <div class="flex justify-between text-slate-400">
+              <span>VP dos 5 anos <span class="tooltip" data-tip="Soma do EBITDA projetado por 5 anos, trazido a valor presente pelo WACC."></span></span>
+              <span class="font-mono">${formatBRL(dcfDetailed.operationalPV, { compact: true })} <span class="text-slate-600">(${opShare.toFixed(0)}%)</span></span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>Valor Terminal <span class="tooltip" data-tip="Valor da empresa continuando a operar depois do horizonte de 5 anos, pela perpetuidade de Gordon a ${(this.params.terminalGrowth*100).toFixed(1)}% a.a."></span></span>
+              <span class="font-mono">${formatBRL(dcfDetailed.terminalPV, { compact: true })} <span class="text-slate-600">(${vtShare.toFixed(0)}%)</span></span>
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div class="p-3 rounded-xl bg-white/[0.02] border border-white/5">
           <div class="flex items-center justify-between text-xs mb-1.5">
@@ -248,6 +449,7 @@ export class Dashboard {
             <div class="h-full rounded-full transition-all duration-700" style="width:${widthPct}%; background:${meta.color}"></div>
           </div>
           <div class="text-xs text-slate-500 mt-1.5">Contribui ${formatBRL(contribution)} ao consolidado</div>
+          ${extraBreakdown}
         </div>
       `;
     }).join('');

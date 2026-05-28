@@ -105,6 +105,7 @@ export function effectivePreset(inputs) {
 export const DEFAULT_PARAMS = {
   wacc: 0.22,
   growth: 0.12,
+  terminalGrowth: 0.03,  // Perpetuidade de Gordon — ~inflação BR de longo prazo
   dcfYears: 5,
   weights: {
     revenue: 0.30,
@@ -171,6 +172,28 @@ export const FINANCIAL_DEFAULTS = {
 };
 
 /**
+ * Fórmula simplificada do mercado: Valuation = Lucro Líquido Anual × Múltiplo
+ * Faixa típica do mercado: 2× (conservador) a 4× (otimista), mediana 3×.
+ * Equivalente a "24 a 48 meses de lucro" — regra prática usada por compradores.
+ *
+ * Esta valuation é apresentada APENAS como REFERÊNCIA — não entra na consolidação
+ * ponderada dos 5 métodos. Serve para comparação rápida com o cálculo formal.
+ */
+export const SIMPLIFIED_MULTIPLES = { low: 2, mid: 3, high: 4 };
+
+export function simplifiedValuation(netIncome) {
+  if (!Number.isFinite(netIncome) || netIncome <= 0) {
+    return { low: 0, mid: 0, high: 0, available: false };
+  }
+  return {
+    low: netIncome * SIMPLIFIED_MULTIPLES.low,
+    mid: netIncome * SIMPLIFIED_MULTIPLES.mid,
+    high: netIncome * SIMPLIFIED_MULTIPLES.high,
+    available: true,
+  };
+}
+
+/**
  * Calcula EBITDA e Lucro Líquido a partir do faturamento e percentuais.
  * EBITDA = Faturamento − Custos − Despesas Operacionais
  * Lucro Líquido = EBITDA − Impostos − Depreciação + Rec. Fin. − Desp. Fin.
@@ -198,6 +221,60 @@ export function computeFinancials(revenue, components, mode = 'simple') {
 }
 
 /**
+ * Métricas digitais (LTV/CAC e Churn) — usadas para ajustar a posição
+ * do múltiplo dentro da faixa do setor (sem extrapolar mín/máx).
+ *
+ * Cada tier soma um "deslocamento" no [0,1] usado para interpolar o múltiplo.
+ *
+ *   modificador final = soma dos tiers (clamp -0.30 a +0.25)
+ *
+ * Aplicado como: rácio_efetivo = clamp(0, 1, recurringRatio + modificador)
+ */
+
+export const LTV_CAC_TIERS = [
+  { max: 1,        label: 'Ruim',        modifier: -0.20 },
+  { max: 3,        label: 'Médio',       modifier:  0.00 },
+  { max: 5,        label: 'Excelente',   modifier: +0.10 },
+  { max: Infinity, label: 'Muito forte', modifier: +0.15 },
+];
+
+export const CHURN_TIERS = [
+  { max: 0.02,     label: 'Excelente (< 2%/mês)', modifier: +0.10 },
+  { max: 0.05,     label: 'Bom (2–5%/mês)',       modifier: +0.05 },
+  { max: 0.10,     label: 'Atenção (5–10%/mês)',  modifier: -0.05 },
+  { max: Infinity, label: 'Alto (> 10%/mês)',     modifier: -0.15 },
+];
+
+export function ltvCacTier(ratio) {
+  if (!Number.isFinite(ratio) || ratio < 0) return null;
+  return LTV_CAC_TIERS.find(t => ratio < t.max) || LTV_CAC_TIERS[LTV_CAC_TIERS.length - 1];
+}
+
+export function churnTier(monthlyChurn) {
+  if (!Number.isFinite(monthlyChurn) || monthlyChurn < 0) return null;
+  return CHURN_TIERS.find(t => monthlyChurn < t.max) || CHURN_TIERS[CHURN_TIERS.length - 1];
+}
+
+/**
+ * Calcula o modificador total a partir das métricas digitais.
+ * Retorna 0 se métricas não informadas.
+ */
+export function digitalMetricsModifier(metrics) {
+  if (!metrics) return 0;
+  let mod = 0;
+  const { ltv, cac, monthlyChurn } = metrics;
+  if (Number.isFinite(ltv) && Number.isFinite(cac) && cac > 0) {
+    const tier = ltvCacTier(ltv / cac);
+    if (tier) mod += tier.modifier;
+  }
+  if (Number.isFinite(monthlyChurn) && monthlyChurn >= 0) {
+    const tier = churnTier(monthlyChurn);
+    if (tier) mod += tier.modifier;
+  }
+  return Math.min(0.25, Math.max(-0.30, mod));
+}
+
+/**
  * Múltiplos interpolados pelo % de receita recorrente, dentro da faixa
  * do setor (ou preset custom). ratio = 0 → min, ratio = 1 → max.
  *
@@ -209,15 +286,15 @@ function _resolvePreset(presetOrKey) {
   return getSectorPreset(presetOrKey);
 }
 
-export function revenueMultipleFor(recurringRatio, presetOrKey = DEFAULT_SECTOR, manualOverride = null) {
+export function revenueMultipleFor(recurringRatio, presetOrKey = DEFAULT_SECTOR, manualOverride = null, metricsModifier = 0) {
   if (typeof manualOverride === 'number') return manualOverride;
-  const r = Math.min(1, Math.max(0, recurringRatio));
+  const r = Math.min(1, Math.max(0, recurringRatio + (metricsModifier || 0)));
   const { min, max } = _resolvePreset(presetOrKey).revenueMultiple;
   return min + (max - min) * r;
 }
-export function ebitdaMultipleFor(recurringRatio, presetOrKey = DEFAULT_SECTOR, manualOverride = null) {
+export function ebitdaMultipleFor(recurringRatio, presetOrKey = DEFAULT_SECTOR, manualOverride = null, metricsModifier = 0) {
   if (typeof manualOverride === 'number') return manualOverride;
-  const r = Math.min(1, Math.max(0, recurringRatio));
+  const r = Math.min(1, Math.max(0, recurringRatio + (metricsModifier || 0)));
   const { min, max } = _resolvePreset(presetOrKey).ebitdaMultiple;
   return min + (max - min) * r;
 }
@@ -225,8 +302,8 @@ export function ebitdaMultipleFor(recurringRatio, presetOrKey = DEFAULT_SECTOR, 
 /**
  * Método 1 — Múltiplo de Faturamento Bruto
  */
-export function calcRevenue(revenue, recurringRatio, presetOrKey, manualOverride) {
-  return Math.max(0, revenue) * revenueMultipleFor(recurringRatio, presetOrKey, manualOverride);
+export function calcRevenue(revenue, recurringRatio, presetOrKey, manualOverride, metricsModifier) {
+  return Math.max(0, revenue) * revenueMultipleFor(recurringRatio, presetOrKey, manualOverride, metricsModifier);
 }
 
 /**
@@ -234,18 +311,25 @@ export function calcRevenue(revenue, recurringRatio, presetOrKey, manualOverride
  * +0.5 no múltiplo se empresa tem mais de 3 anos
  * Retorna 0 se EBITDA <= 0
  */
-export function calcEbitdaMultiple(ebitda, recurringRatio, age, presetOrKey, manualOverride) {
+export function calcEbitdaMultiple(ebitda, recurringRatio, age, presetOrKey, manualOverride, metricsModifier) {
   if (ebitda <= 0) return 0;
-  const base = ebitdaMultipleFor(recurringRatio, presetOrKey, manualOverride);
+  const base = ebitdaMultipleFor(recurringRatio, presetOrKey, manualOverride, metricsModifier);
   const maturityBonus = age === 'gt3' ? 0.5 : 0;
   return ebitda * (base + maturityBonus);
 }
 
 /**
- * Método 3 — Fluxo de Caixa Descontado (5 anos)
- * Projeta EBITDA crescendo a `growth` por `years`, traz cada ano ao VP com `wacc`.
+ * Método 3 — Fluxo de Caixa Descontado (5 anos + Valor Terminal)
+ *
+ * VP = Σ FC_t / (1+wacc)^t  +  VT / (1+wacc)^n
+ *
+ * Valor Terminal pela perpetuidade de Gordon:
+ *   VT = FC_n × (1 + g_perp) / (wacc − g_perp)
+ *
+ * Representa o valor da empresa continuando a operar depois do horizonte
+ * de projeção. Tipicamente responde por 50–70% do DCF total.
  */
-export function calcDCF(ebitda, { wacc = 0.22, growth = 0.12, years = 5 } = {}) {
+export function calcDCF(ebitda, { wacc = 0.22, growth = 0.12, years = 5, terminalGrowth = 0.03 } = {}) {
   if (ebitda <= 0) return 0;
   let pv = 0;
   let projected = ebitda;
@@ -253,7 +337,40 @@ export function calcDCF(ebitda, { wacc = 0.22, growth = 0.12, years = 5 } = {}) 
     projected = projected * (1 + growth);
     pv += projected / Math.pow(1 + wacc, year);
   }
-  return pv;
+  // Valor Terminal — exige wacc > g_perp (sempre verdadeiro com nossos limites)
+  const gPerp = Math.max(0, terminalGrowth);
+  const terminalCashFlow = projected * (1 + gPerp);
+  const terminalValue = terminalCashFlow / (wacc - gPerp);
+  const terminalPV = terminalValue / Math.pow(1 + wacc, years);
+  return pv + terminalPV;
+}
+
+/**
+ * Versão detalhada do DCF que retorna VP operacional, VT e VT_PV separados.
+ * Útil para exibição (mostrar contribuição do terminal value no relatório).
+ */
+export function calcDCFDetailed(ebitda, { wacc = 0.22, growth = 0.12, years = 5, terminalGrowth = 0.03 } = {}) {
+  if (ebitda <= 0) {
+    return { operationalPV: 0, terminalValue: 0, terminalPV: 0, total: 0, terminalShare: 0 };
+  }
+  let operationalPV = 0;
+  let projected = ebitda;
+  for (let year = 1; year <= years; year++) {
+    projected = projected * (1 + growth);
+    operationalPV += projected / Math.pow(1 + wacc, year);
+  }
+  const gPerp = Math.max(0, terminalGrowth);
+  const terminalCashFlow = projected * (1 + gPerp);
+  const terminalValue = terminalCashFlow / (wacc - gPerp);
+  const terminalPV = terminalValue / Math.pow(1 + wacc, years);
+  const total = operationalPV + terminalPV;
+  return {
+    operationalPV,
+    terminalValue,
+    terminalPV,
+    total,
+    terminalShare: total > 0 ? terminalPV / total : 0,
+  };
 }
 
 /**
@@ -278,10 +395,16 @@ export function calcAllMethods(inputs, params = DEFAULT_PARAMS) {
   const preset = effectivePreset(inputs);
   const manualRev = inputs.manualMultiples?.revenue;
   const manualEbitda = inputs.manualMultiples?.ebitda;
+  const metricsModifier = digitalMetricsModifier(inputs.digitalMetrics);
   return {
-    revenue: calcRevenue(inputs.revenue, ratio, preset, manualRev),
-    ebitda: calcEbitdaMultiple(inputs.ebitda, ratio, inputs.age, preset, manualEbitda),
-    dcf: calcDCF(inputs.ebitda, { wacc: params.wacc, growth: params.growth, years: params.dcfYears }),
+    revenue: calcRevenue(inputs.revenue, ratio, preset, manualRev, metricsModifier),
+    ebitda: calcEbitdaMultiple(inputs.ebitda, ratio, inputs.age, preset, manualEbitda, metricsModifier),
+    dcf: calcDCF(inputs.ebitda, {
+      wacc: params.wacc,
+      growth: params.growth,
+      years: params.dcfYears,
+      terminalGrowth: params.terminalGrowth,
+    }),
     nav: calcNAV(inputs.assets),
     replacement: calcReplacement(inputs.investment, params.replacementMultiplier),
   };
@@ -397,6 +520,99 @@ export function calcRange(methods, consolidated) {
 }
 
 /**
+ * Score de Saúde do Negócio (0-100)
+ *
+ * Combina 6 componentes ponderados em um índice único que diagnostica
+ * a saúde geral do negócio (independente do valuation absoluto).
+ *
+ * Componentes (pesos):
+ *   - Margem EBITDA (25%)
+ *   - LTV/CAC (20%)
+ *   - Churn (20%)
+ *   - Momento da empresa (15%)
+ *   - Dependência dos sócios (10%)
+ *   - Recorrência (10%)
+ *
+ * Retorna { score, tier, breakdown[] } onde breakdown lista cada componente
+ * com seu score parcial, peso e classificação ("força" ou "fraqueza").
+ */
+const SCORE_TIERS = [
+  { max: 40,  label: 'Crítico',     color: '#ef4444' },
+  { max: 60,  label: 'Em atenção',  color: '#f59e0b' },
+  { max: 80,  label: 'Saudável',    color: '#10b981' },
+  { max: 101, label: 'Excelente',   color: '#06b6d4' },
+];
+
+function _scoreMargin(margin, preset) {
+  if (!margin || margin.value == null) return 50;
+  const { min, max } = preset.healthyMargin;
+  const v = margin.value;
+  if (v < min) return Math.max(0, 40 * (v / Math.max(1, min)));
+  if (v <= max) return 40 + 50 * ((v - min) / Math.max(1, max - min));
+  return Math.min(100, 90 + 10 * Math.min(1, (v - max) / 20));
+}
+
+function _scoreLtvCac(metrics) {
+  if (!metrics?.ltv || !metrics?.cac || metrics.cac <= 0) return null;
+  const r = metrics.ltv / metrics.cac;
+  if (r < 1) return 30 * r;
+  if (r < 3) return 30 + 30 * ((r - 1) / 2);
+  if (r < 5) return 60 + 25 * ((r - 3) / 2);
+  return Math.min(100, 85 + 15 * Math.min(1, (r - 5) / 5));
+}
+
+function _scoreChurn(metrics) {
+  if (typeof metrics?.monthlyChurn !== 'number') return null;
+  const c = metrics.monthlyChurn;
+  if (c >= 0.10) return Math.max(0, 25 - 100 * (c - 0.10));
+  if (c >= 0.05) return 25 + 25 * (1 - (c - 0.05) / 0.05);
+  if (c >= 0.02) return 50 + 30 * (1 - (c - 0.02) / 0.03);
+  return 80 + 20 * (1 - c / 0.02);
+}
+
+function _scoreMoment(key) {
+  const map = { not_operating: 0, difficulties: 20, stagnant: 50, growing_moderate: 75, growing_fast: 95 };
+  return key in map ? map[key] : 50;
+}
+
+function _scoreFounder(key) {
+  const map = { total: 10, high_: 30, medium: 55, low: 80, none: 100, high: 30, low_legacy: 80 };
+  return key in map ? map[key] : 55;
+}
+
+function _scoreRecurring(ratio) {
+  const r = Math.max(0, Math.min(1, ratio ?? 0));
+  return 20 + 75 * r;
+}
+
+export function calcHealthScore(inputs, preset = null) {
+  const _preset = preset || effectivePreset(inputs);
+  const _margin = calcMargin(inputs.revenue, inputs.ebitda, _preset);
+
+  // Componentes (peso, label, getScore)
+  const comps = [
+    { key: 'margin',    weight: 25, label: 'Margem EBITDA',           value: _scoreMargin(_margin, _preset),   missing: false },
+    { key: 'ltvcac',    weight: 20, label: 'LTV / CAC',               value: _scoreLtvCac(inputs.digitalMetrics), missing: _scoreLtvCac(inputs.digitalMetrics) === null },
+    { key: 'churn',     weight: 20, label: 'Churn mensal',            value: _scoreChurn(inputs.digitalMetrics),  missing: _scoreChurn(inputs.digitalMetrics) === null },
+    { key: 'moment',    weight: 15, label: 'Momento da empresa',      value: _scoreMoment(inputs.companyMoment), missing: false },
+    { key: 'founder',   weight: 10, label: 'Independência dos sócios', value: _scoreFounder(inputs.founder),     missing: false },
+    { key: 'recurring', weight: 10, label: 'Recorrência da receita',  value: _scoreRecurring(inputs.recurringRatio), missing: false },
+  ];
+
+  // Quando métrica não informada, usa 50 (neutro) mas marca como missing
+  const breakdown = comps.map(c => ({
+    ...c,
+    score: c.value == null ? 50 : Math.round(c.value),
+    contribution: ((c.value == null ? 50 : c.value) * c.weight) / 100,
+  }));
+
+  const score = Math.round(breakdown.reduce((s, c) => s + c.contribution, 0));
+  const tier = SCORE_TIERS.find(t => score < t.max);
+
+  return { score, tier, breakdown, components: comps };
+}
+
+/**
  * Cálculo completo
  */
 export function fullCalculation(inputs, params = DEFAULT_PARAMS) {
@@ -405,7 +621,8 @@ export function fullCalculation(inputs, params = DEFAULT_PARAMS) {
   const consolidated = consolidate(methods, inputs, params);
   const margin = calcMargin(inputs.revenue, inputs.ebitda, preset);
   const range = calcRange(methods, consolidated);
-  return { methods, consolidated, range, margin, params, inputs, preset };
+  const health = calcHealthScore(inputs, preset);
+  return { methods, consolidated, range, margin, health, params, inputs, preset };
 }
 
 /**
@@ -422,7 +639,7 @@ export const METHOD_META = {
   },
   dcf: {
     label: 'Fluxo de Caixa Descontado', short: 'DCF', color: '#a78bfa', weight: 0.25,
-    tip: 'Projeta o EBITDA por 5 anos crescendo à taxa esperada, e desconta tudo a valor presente usando o WACC. Reflete o valor de geração de caixa futura.',
+    tip: 'Projeta o EBITDA por 5 anos + Valor Terminal (perpetuidade de Gordon a 3% a.a.). Tudo descontado a valor presente pelo WACC. O Valor Terminal representa o valor da empresa continuando a operar depois do horizonte de 5 anos — costuma responder por 50–70% do total.',
   },
   nav: {
     label: 'Valor Patrimonial Líquido', short: 'NAV', color: '#34d399', weight: 0.05,
