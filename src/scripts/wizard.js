@@ -12,7 +12,15 @@ import {
   SECTOR_PRESETS,
   DEFAULT_SECTOR,
   getSectorPreset,
+  COMPANY_MOMENTS,
+  DEFAULT_PARAMS,
 } from './valuation.js';
+import {
+  saveCustomPreset, loadCustomPreset, clearCustomPreset,
+  saveRecurringRatio, loadRecurringRatio, clearRecurringRatio,
+  saveFineTune, loadFineTune, clearFineTune,
+} from './storage.js';
+import { toast } from './ui-helpers.js';
 
 const COMPONENT_META = {
   imposto:           { label: 'Imposto',           tip: 'Tributos sobre receita (Simples, ICMS, ISS, etc).',                    max: 40 },
@@ -25,25 +33,33 @@ const COMPONENT_META = {
 };
 
 const STEP_LABELS = {
-  1: 'Perfil & Risco',
-  2: 'Financeiro',
-  3: 'Patrimônio',
-  4: 'Resultados',
+  1: 'Perfil & Setor',
+  2: 'Riscos & Maturidade',
+  3: 'Financeiro',
+  4: 'Patrimônio',
+  5: 'Resultados',
 };
 
 export class Wizard {
   constructor({ onComplete }) {
     this.current = 1;
-    this.total = 4;
+    this.total = 5;
     this.onComplete = onComplete;
+    // Carrega padrões salvos (se existirem)
+    const savedCustom = loadCustomPreset();
+    const savedRatio = loadRecurringRatio();
+    const savedFineTune = loadFineTune();
     this.state = {
+      companyName: '',
       sector: DEFAULT_SECTOR,
-      manualMultiples: { revenue: null, ebitda: null },
-      recurringRatio: 1.0,
+      customPreset: savedCustom,
+      manualMultiples: savedFineTune?.manualMultiples ?? { revenue: null, ebitda: null },
+      wacc:   typeof savedFineTune?.wacc   === 'number' ? savedFineTune.wacc   : null,
+      growth: typeof savedFineTune?.growth === 'number' ? savedFineTune.growth : null,
+      recurringRatio: savedRatio !== null ? savedRatio : 1.0,
       founder: 'medium',
       companyMoment: 'growing_fast',
       trademark: false,
-      employees: '',
       age: '1to3',
       revenue: 0,
       ebitda: 0,
@@ -87,14 +103,16 @@ export class Wizard {
           } else {
             this.state[key] = value;
           }
+          // Mudança de momento da empresa reseta growth manual e re-renderiza ajustes finos
+          if (key === 'companyMoment') {
+            this.state.growth = null;
+            this._renderFineTuneCard();
+          }
         });
       });
     });
 
     document.getElementById('age').addEventListener('change', () => this._syncState());
-    document.getElementById('employees').addEventListener('change', () => {
-      this.state.employees = document.getElementById('employees').value;
-    });
 
     // Sidebar: clicks em passos já concluídos voltam pra eles
     this.$sidebarSteps.forEach(item => {
@@ -107,13 +125,43 @@ export class Wizard {
       });
     });
 
+    // Nome da empresa
+    const $name = document.getElementById('company-name');
+    if ($name) {
+      $name.addEventListener('input', () => {
+        this.state.companyName = $name.value.trim();
+      });
+    }
+
     // Seletor de setor
     this._renderSectorGrid();
 
-    // Slider de % recorrente
+    // Slider de % recorrente — aplica valor salvo (se houver) no carregamento
     const $ratio = document.getElementById('recurring-ratio');
     $ratio.addEventListener('input', () => this._updateRecurringDisplay());
+    $ratio.value = Math.round(this.state.recurringRatio * 100);
     this._updateRecurringDisplay();
+
+    // Botões da Composição da Receita (Salvar/Usar padrão)
+    document.getElementById('btn-recurring-save')?.addEventListener('click', () => {
+      if (saveRecurringRatio(this.state.recurringRatio)) {
+        toast(`✓ ${Math.round(this.state.recurringRatio*100)}% recorrente salvo como padrão`, { type: 'success' });
+      } else {
+        toast('Não foi possível salvar (localStorage indisponível)', { type: 'error' });
+      }
+    });
+    document.getElementById('btn-recurring-reset')?.addEventListener('click', () => {
+      const saved = loadRecurringRatio();
+      if (saved !== null) {
+        this._setRecurringRatio(saved);
+        toast(`Restaurado para ${Math.round(saved*100)}% (seu padrão salvo)`, { type: 'info' });
+      } else {
+        // Sem padrão salvo — volta para default do setor
+        const preset = this._effectivePresetCurrent(this.state.sector);
+        this._setRecurringRatio(preset.defaultRecurringRatio);
+        toast(`Restaurado para ${Math.round(preset.defaultRecurringRatio*100)}% (padrão do setor ${preset.label})`, { type: 'info' });
+      }
+    });
 
     // Toggles do passo financeiro
     document.querySelectorAll('[data-period]').forEach(btn => {
@@ -140,47 +188,199 @@ export class Wizard {
     this.state.age = document.getElementById('age').value;
     this.state.investment = parseCurrency(document.getElementById('investment'));
     this.state.assets = parseCurrency(document.getElementById('assets'));
-    // founder, companyMoment, trademark, employees — gerenciados pelos handlers de pill/select
+    // founder, companyMoment, trademark — gerenciados pelos handlers de pill
     // revenue, ebitda, components — gerenciados por _onRevenueChange / _recomputeFinancials
+  }
+
+  /** Helper: atualiza o slider de % recorrente programaticamente */
+  _setRecurringRatio(ratio) {
+    const pct = Math.round(Math.min(1, Math.max(0, ratio)) * 100);
+    const $slider = document.getElementById('recurring-ratio');
+    if ($slider) $slider.value = pct;
+    this._updateRecurringDisplay();
   }
 
   _updateRecurringDisplay() {
     const pct = parseInt(document.getElementById('recurring-ratio').value, 10);
     const ratio = pct / 100;
     document.getElementById('recurring-display').textContent = `${pct}%`;
-    document.getElementById('multiple-revenue').textContent = `${revenueMultipleFor(ratio, this.state.sector).toFixed(2)}×`;
-    document.getElementById('multiple-ebitda').textContent = `${ebitdaMultipleFor(ratio, this.state.sector).toFixed(2)}×`;
+    const preset = this._effectivePresetCurrent(this.state.sector);
+    document.getElementById('multiple-revenue').textContent = `${revenueMultipleFor(ratio, preset).toFixed(2)}×`;
+    document.getElementById('multiple-ebitda').textContent = `${ebitdaMultipleFor(ratio, preset).toFixed(2)}×`;
     this.state.recurringRatio = ratio;
+
+    // Se sliders de múltiplo estão em modo auto (sem override), sincroniza
+    const syncSlider = (sliderId, displayId, value) => {
+      const $s = document.getElementById(sliderId);
+      const $d = document.getElementById(displayId);
+      if ($s && document.activeElement !== $s) $s.value = value;
+      if ($d) $d.textContent = `${value.toFixed(2)}×`;
+    };
+    if (this.state.manualMultiples?.revenue == null) {
+      syncSlider('ft-mrev-slider', 'ft-mrev-display', revenueMultipleFor(ratio, preset));
+    }
+    if (this.state.manualMultiples?.ebitda == null) {
+      syncSlider('ft-meb-slider', 'ft-meb-display', ebitdaMultipleFor(ratio, preset));
+    }
   }
 
   _renderSectorGrid() {
     const $grid = document.getElementById('sector-grid');
     if (!$grid) return;
-    $grid.innerHTML = Object.entries(SECTOR_PRESETS).map(([key, preset]) => `
-      <button type="button" class="sector-card${key === this.state.sector ? ' active' : ''}" data-sector="${key}">
-        <div class="sector-label">${preset.label}</div>
-        <div class="sector-desc">${preset.description}</div>
-        <div class="sector-meta">
-          <span title="Múltiplo EBITDA">EBITDA ${preset.ebitdaMultiple.min}–${preset.ebitdaMultiple.max}×</span>
-          <span title="Margem saudável">Margem ${preset.healthyMargin.min}–${preset.healthyMargin.max}%</span>
-        </div>
-      </button>
-    `).join('');
+    $grid.innerHTML = Object.entries(SECTOR_PRESETS).map(([key, preset]) => {
+      const isCustom = key === 'custom';
+      const metaHtml = isCustom
+        ? '<span title="Defina suas próprias faixas">Defina suas faixas</span>'
+        : `<span title="Múltiplo EBITDA">EBITDA ${preset.ebitdaMultiple.min}–${preset.ebitdaMultiple.max}×</span>
+           <span title="Margem saudável">Margem ${preset.healthyMargin.min}–${preset.healthyMargin.max}%</span>`;
+      return `
+        <button type="button" class="sector-card${key === this.state.sector ? ' active' : ''}" data-sector="${key}">
+          <div class="sector-label">
+            ${preset.label}
+            ${preset.tooltip ? `<span class="tooltip" data-tip="${preset.tooltip}"></span>` : ''}
+          </div>
+          <div class="sector-desc">${preset.description}</div>
+          <div class="sector-meta">${metaHtml}</div>
+        </button>
+      `;
+    }).join('');
 
     $grid.querySelectorAll('.sector-card').forEach(btn => {
-      btn.addEventListener('click', () => this._selectSector(btn.dataset.sector));
+      btn.addEventListener('click', (e) => {
+        // Click no ícone de tooltip não deve mudar o setor
+        if (e.target.closest('.tooltip')) return;
+        this._selectSector(btn.dataset.sector);
+      });
     });
+    this._initCustomPresetInputs();
+    this._updateCustomPanelVisibility();
     this._updateSectorInfo();
   }
 
   _selectSector(key) {
     this.state.sector = key;
-    // Sugere recurringRatio do preset, mas só se o usuário ainda não ajustou explicitamente
-    const preset = getSectorPreset(key);
+    const preset = this._effectivePresetCurrent(key);
     document.querySelectorAll('.sector-card').forEach(b =>
       b.classList.toggle('active', b.dataset.sector === key));
-    // Atualiza display interativo
     document.getElementById('recurring-ratio').value = Math.round(preset.defaultRecurringRatio * 100);
+    this._updateRecurringDisplay();
+    this._updateCustomPanelVisibility();
+    this._updateSectorInfo();
+  }
+
+  _effectivePresetCurrent(key) {
+    if (key === 'custom' && this.state.customPreset) {
+      const base = getSectorPreset('custom');
+      const c = this.state.customPreset;
+      return {
+        ...base,
+        ebitdaMultiple:  { ...base.ebitdaMultiple,  ...(c.ebitdaMultiple  || {}) },
+        revenueMultiple: { ...base.revenueMultiple, ...(c.revenueMultiple || {}) },
+        healthyMargin:   { ...base.healthyMargin,   ...(c.healthyMargin   || {}) },
+        expectedGrowth:  typeof c.expectedGrowth === 'number' ? c.expectedGrowth : base.expectedGrowth,
+      };
+    }
+    return getSectorPreset(key);
+  }
+
+  _updateCustomPanelVisibility() {
+    const $panel = document.getElementById('custom-preset-panel');
+    if (!$panel) return;
+    if (this.state.sector === 'custom') {
+      $panel.classList.remove('hidden');
+      this._populateCustomInputs();
+    } else {
+      $panel.classList.add('hidden');
+    }
+  }
+
+  _populateCustomInputs() {
+    const base = getSectorPreset('custom');
+    const c = this.state.customPreset || {};
+    const v = (path, fallback) => {
+      const segs = path.split('.');
+      let ref = c;
+      for (const s of segs) { ref = ref?.[s]; if (ref == null) return fallback; }
+      return ref;
+    };
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      // Não sobrescreve se o usuário estiver editando esse input no momento
+      if (el && document.activeElement !== el) el.value = val;
+    };
+    set('custom-eb-min',     v('ebitdaMultiple.min',  base.ebitdaMultiple.min));
+    set('custom-eb-max',     v('ebitdaMultiple.max',  base.ebitdaMultiple.max));
+    set('custom-rev-min',    v('revenueMultiple.min', base.revenueMultiple.min));
+    set('custom-rev-max',    v('revenueMultiple.max', base.revenueMultiple.max));
+    set('custom-margin-min', v('healthyMargin.min',   base.healthyMargin.min));
+    set('custom-margin-max', v('healthyMargin.max',   base.healthyMargin.max));
+    set('custom-growth',     ((typeof c.expectedGrowth === 'number' ? c.expectedGrowth : base.expectedGrowth) * 100).toFixed(1));
+  }
+
+  _initCustomPresetInputs() {
+    const ids = ['custom-eb-min','custom-eb-max','custom-rev-min','custom-rev-max',
+                 'custom-margin-min','custom-margin-max','custom-growth'];
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el || el.dataset.bound) return;
+      el.dataset.bound = '1';
+      el.addEventListener('input', () => this._syncCustomPreset());
+    });
+
+    const $save = document.getElementById('btn-custom-save');
+    if ($save && !$save.dataset.bound) {
+      $save.dataset.bound = '1';
+      $save.addEventListener('click', () => {
+        this._syncCustomPreset();
+        if (saveCustomPreset(this.state.customPreset)) {
+          toast('✓ Faixas personalizadas salvas como padrão', { type: 'success' });
+        } else {
+          toast('Não foi possível salvar (localStorage indisponível)', { type: 'error' });
+        }
+      });
+    }
+
+    const $reset = document.getElementById('btn-custom-reset');
+    if ($reset && !$reset.dataset.bound) {
+      $reset.dataset.bound = '1';
+      $reset.addEventListener('click', () => {
+        clearCustomPreset();
+        this.state.customPreset = null;
+        const base = getSectorPreset('custom');
+        // Restaura inputs aos defaults do sistema
+        document.getElementById('custom-eb-min').value     = base.ebitdaMultiple.min;
+        document.getElementById('custom-eb-max').value     = base.ebitdaMultiple.max;
+        document.getElementById('custom-rev-min').value    = base.revenueMultiple.min;
+        document.getElementById('custom-rev-max').value    = base.revenueMultiple.max;
+        document.getElementById('custom-margin-min').value = base.healthyMargin.min;
+        document.getElementById('custom-margin-max').value = base.healthyMargin.max;
+        document.getElementById('custom-growth').value     = (base.expectedGrowth * 100).toFixed(1);
+        this._updateRecurringDisplay();
+        this._updateSectorInfo();
+        toast('Faixas restauradas ao padrão do sistema', { type: 'info' });
+      });
+    }
+  }
+
+  _syncCustomPreset() {
+    const num = (id) => {
+      const v = parseFloat(document.getElementById(id)?.value);
+      return Number.isFinite(v) ? v : null;
+    };
+    const ebMin = num('custom-eb-min');
+    const ebMax = num('custom-eb-max');
+    const revMin = num('custom-rev-min');
+    const revMax = num('custom-rev-max');
+    const mgMin = num('custom-margin-min');
+    const mgMax = num('custom-margin-max');
+    const growth = num('custom-growth');
+
+    this.state.customPreset = {
+      ebitdaMultiple:  { ...(ebMin !== null && { min: ebMin }), ...(ebMax !== null && { max: ebMax }) },
+      revenueMultiple: { ...(revMin !== null && { min: revMin }), ...(revMax !== null && { max: revMax }) },
+      healthyMargin:   { ...(mgMin !== null && { min: mgMin }),  ...(mgMax !== null && { max: mgMax }) },
+      ...(growth !== null && { expectedGrowth: growth / 100 }),
+    };
     this._updateRecurringDisplay();
     this._updateSectorInfo();
   }
@@ -188,13 +388,177 @@ export class Wizard {
   _updateSectorInfo() {
     const $info = document.getElementById('sector-info');
     if (!$info) return;
-    const preset = getSectorPreset(this.state.sector);
+    const preset = this._effectivePresetCurrent(this.state.sector);
     $info.innerHTML = `
       <strong class="text-slate-300">${preset.label}:</strong>
       Múltiplo de receita ${preset.revenueMultiple.min}–${preset.revenueMultiple.max}× ·
       Múltiplo EBITDA ${preset.ebitdaMultiple.min}–${preset.ebitdaMultiple.max}× ·
       Crescimento esperado ${(preset.expectedGrowth*100).toFixed(0)}% a.a.
     `;
+    // Re-renderiza ajustes finos: ranges dos múltiplos podem ter mudado
+    this._renderFineTuneCard();
+  }
+
+  /**
+   * Resolve valores efetivos para os sliders de ajuste fino.
+   * Manual override > momento da empresa > preset do setor > default global.
+   */
+  _effectiveWacc() {
+    return typeof this.state.wacc === 'number' ? this.state.wacc : DEFAULT_PARAMS.wacc;
+  }
+  _effectiveGrowth() {
+    if (typeof this.state.growth === 'number') return this.state.growth;
+    if (this.state.companyMoment && COMPANY_MOMENTS[this.state.companyMoment]) {
+      return COMPANY_MOMENTS[this.state.companyMoment].growth;
+    }
+    const preset = this._effectivePresetCurrent(this.state.sector);
+    return preset.expectedGrowth;
+  }
+  _effectiveRevMult() {
+    const preset = this._effectivePresetCurrent(this.state.sector);
+    return revenueMultipleFor(this.state.recurringRatio, preset, this.state.manualMultiples?.revenue);
+  }
+  _effectiveEbMult() {
+    const preset = this._effectivePresetCurrent(this.state.sector);
+    return ebitdaMultipleFor(this.state.recurringRatio, preset, this.state.manualMultiples?.ebitda);
+  }
+
+  _renderFineTuneCard() {
+    const $container = document.getElementById('fine-tune-container');
+    if (!$container) return;
+    const preset = this._effectivePresetCurrent(this.state.sector);
+    const revRange = preset.revenueMultiple;
+    const ebRange = preset.ebitdaMultiple;
+    const wacc = this._effectiveWacc();
+    const growth = this._effectiveGrowth();
+    const revMult = this._effectiveRevMult();
+    const ebMult = this._effectiveEbMult();
+
+    // Preserva foco para não interromper digitação
+    const focusedId = document.activeElement?.id;
+
+    $container.innerHTML = `
+      <div class="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
+        <div class="flex items-center justify-between gap-3 mb-1 flex-wrap">
+          <label class="block text-sm font-medium text-slate-300">
+            Ajustes finos
+            <span class="tooltip" data-tip="Refine WACC, crescimento e múltiplos antes de ver o resultado. Os defaults vêm do setor e do momento da empresa.">ⓘ</span>
+          </label>
+          <div class="flex gap-2">
+            <button type="button" id="btn-fine-save" class="custom-action-btn custom-action-primary">
+              💾 Salvar Dados
+            </button>
+            <button type="button" id="btn-fine-reset" class="custom-action-btn">
+              ↻ Restaurar Padrão
+            </button>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mb-4">Estes valores entram diretamente no DCF e nos múltiplos. Você pode reabrir esta etapa quando quiser.</p>
+
+        <div class="grid sm:grid-cols-2 gap-x-6 gap-y-5">
+          <div>
+            <div class="flex justify-between text-xs mb-2">
+              <span class="text-slate-400">
+                Taxa de desconto (WACC)
+                <span class="tooltip" data-tip="Custo Médio Ponderado de Capital. Para negócios digitais brasileiros, 18%–25% é a faixa usual — quanto mais risco, maior o WACC. Usado no DCF para trazer fluxos futuros a valor presente."></span>
+              </span>
+              <span id="ft-wacc-display" class="font-mono text-cyan-400">${(wacc*100).toFixed(1)}%</span>
+            </div>
+            <input type="range" id="ft-wacc-slider" min="15" max="30" step="0.5" value="${wacc*100}" class="slider w-full">
+            <div class="flex justify-between text-[10px] text-slate-600 mt-1"><span>15%</span><span>30%</span></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-2">
+              <span class="text-slate-400">
+                Crescimento anual EBITDA
+                <span class="tooltip" data-tip="Taxa anual projetada para o EBITDA dos próximos 5 anos no DCF. Default vem do Momento da Empresa (passo 2): Crescendo Muito = 25%, Moderadamente = 15%, Estagnada = 3%, Dificuldades = -5%."></span>
+              </span>
+              <span id="ft-growth-display" class="font-mono text-violet-400">${(growth*100).toFixed(1)}%</span>
+            </div>
+            <input type="range" id="ft-growth-slider" min="-10" max="40" step="0.5" value="${growth*100}" class="slider w-full">
+            <div class="flex justify-between text-[10px] text-slate-600 mt-1"><span>-10%</span><span>40%</span></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-2">
+              <span class="text-slate-400">
+                Múltiplo de Receita
+                <span class="tooltip" data-tip="Faturamento bruto × este fator. Ponto de partida: vem do setor escolhido e da % recorrente. Útil quando a empresa ainda não tem lucro consolidado."></span>
+              </span>
+              <span id="ft-mrev-display" class="font-mono text-cyan-400">${revMult.toFixed(2)}×</span>
+            </div>
+            <input type="range" id="ft-mrev-slider" min="${revRange.min}" max="${revRange.max}" step="0.05" value="${revMult}" class="slider w-full">
+            <div class="flex justify-between text-[10px] text-slate-600 mt-1">
+              <span>${revRange.min}×</span><span>${revRange.max}×</span>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-2">
+              <span class="text-slate-400">
+                Múltiplo de EBITDA
+                <span class="tooltip" data-tip="EBITDA × fator setorial. É o múltiplo mais usado em transações reais de Fusões e Aquisições (M&A). Para EdTech Subscription: 4×–8×. Para SaaS B2B: 5×–12×. +0.5× se empresa tem mais de 3 anos."></span>
+              </span>
+              <span id="ft-meb-display" class="font-mono text-violet-400">${ebMult.toFixed(2)}×</span>
+            </div>
+            <input type="range" id="ft-meb-slider" min="${ebRange.min}" max="${ebRange.max}" step="0.05" value="${ebMult}" class="slider w-full">
+            <div class="flex justify-between text-[10px] text-slate-600 mt-1">
+              <span>${ebRange.min}×</span><span>${ebRange.max}×</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this._bindFineTuneHandlers();
+    if (focusedId) document.getElementById(focusedId)?.focus();
+  }
+
+  _bindFineTuneHandlers() {
+    const sliders = {
+      'ft-wacc-slider':   { display: 'ft-wacc-display',   suffix: '%', set: v => this.state.wacc = v/100 },
+      'ft-growth-slider': { display: 'ft-growth-display', suffix: '%', set: v => this.state.growth = v/100 },
+      'ft-mrev-slider':   { display: 'ft-mrev-display',   suffix: '×', set: v => this.state.manualMultiples = { ...this.state.manualMultiples, revenue: v } },
+      'ft-meb-slider':    { display: 'ft-meb-display',    suffix: '×', set: v => this.state.manualMultiples = { ...this.state.manualMultiples, ebitda: v } },
+    };
+    Object.entries(sliders).forEach(([id, { display, suffix, set }]) => {
+      const $s = document.getElementById(id);
+      const $d = document.getElementById(display);
+      if (!$s || !$d) return;
+      $s.addEventListener('input', () => {
+        const v = parseFloat($s.value);
+        set(v);
+        $d.textContent = suffix === '%' ? `${v.toFixed(1)}%` : `${v.toFixed(2)}×`;
+      });
+    });
+
+    document.getElementById('btn-fine-save')?.addEventListener('click', () => {
+      const payload = {
+        wacc: this.state.wacc,
+        growth: this.state.growth,
+        manualMultiples: this.state.manualMultiples,
+      };
+      if (saveFineTune(payload)) {
+        toast('✓ Ajustes finos salvos como padrão', { type: 'success' });
+      } else {
+        toast('Não foi possível salvar (localStorage indisponível)', { type: 'error' });
+      }
+    });
+
+    document.getElementById('btn-fine-reset')?.addEventListener('click', () => {
+      const saved = loadFineTune();
+      if (saved) {
+        this.state.wacc = typeof saved.wacc === 'number' ? saved.wacc : null;
+        this.state.growth = typeof saved.growth === 'number' ? saved.growth : null;
+        this.state.manualMultiples = saved.manualMultiples || { revenue: null, ebitda: null };
+        this._renderFineTuneCard();
+        toast('Ajustes finos restaurados ao seu padrão salvo', { type: 'info' });
+      } else {
+        this.state.wacc = null;
+        this.state.growth = null;
+        this.state.manualMultiples = { revenue: null, ebitda: null };
+        this._renderFineTuneCard();
+        toast('Ajustes finos restaurados ao padrão do setor', { type: 'info' });
+      }
+    });
   }
 
   /**
@@ -348,7 +712,8 @@ export class Wizard {
   }
 
   _validateCurrent() {
-    if (this.current === 2) {
+    // Financeiro agora é o passo 3
+    if (this.current === 3) {
       const { components, financeMode, revenue } = this.state;
       const operacionais = financeMode === 'simple'
         ? (components.custoDespesas ?? 0)
@@ -395,11 +760,11 @@ export class Wizard {
     });
 
     this.$btnBack.disabled = this.current === 1;
-    this.$btnBack.classList.toggle('hidden', this.current === 4);
+    this.$btnBack.classList.toggle('hidden', this.current === this.total);
 
-    if (this.current === 4) {
+    if (this.current === this.total) {
       this.$btnNext.textContent = '↻ Nova simulação';
-    } else if (this.current === 3) {
+    } else if (this.current === this.total - 1) {
       this.$btnNext.textContent = 'Calcular valuation ✨';
     } else {
       this.$btnNext.textContent = 'Avançar →';
@@ -417,7 +782,7 @@ export class Wizard {
   }
 
   next() {
-    if (this.current === 4) {
+    if (this.current === this.total) {
       this.reset();
       return;
     }
@@ -426,8 +791,9 @@ export class Wizard {
     if (this.current < this.total - 1) {
       this.current++;
       this._render();
-    } else if (this.current === 3) {
-      this.current = 4;
+    } else if (this.current === this.total - 1) {
+      // Último passo antes do resultado → calcula e renderiza
+      this.current = this.total;
       this._render();
       this.onComplete?.(this.state);
     }
@@ -470,9 +836,17 @@ export class Wizard {
     this.state.founder = founderValue || 'medium';
     setActivePill('founder', this.state.founder);
 
-    // Setor
+    // Nome da empresa
+    this.state.companyName = state.companyName || '';
+    const $name = document.getElementById('company-name');
+    if ($name) $name.value = this.state.companyName;
+
+    // Setor + customPreset + ajustes finos
     this.state.sector = state.sector || DEFAULT_SECTOR;
+    this.state.customPreset = state.customPreset || null;
     this.state.manualMultiples = state.manualMultiples || { revenue: null, ebitda: null };
+    this.state.wacc = typeof state.wacc === 'number' ? state.wacc : null;
+    this.state.growth = typeof state.growth === 'number' ? state.growth : null;
     this._renderSectorGrid();
 
     this.state.companyMoment = state.companyMoment || 'growing_fast';
@@ -481,8 +855,6 @@ export class Wizard {
     this.state.trademark = state.trademark === true;
     setActivePill('trademark', this.state.trademark ? 'yes' : 'no');
 
-    this.state.employees = state.employees || '';
-    document.getElementById('employees').value = this.state.employees;
     document.getElementById('age').value = state.age || '1to3';
 
     // Período e modo financeiro

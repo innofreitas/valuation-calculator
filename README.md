@@ -214,4 +214,4 @@ Conecte o repositório — não há build step. Aponte para o diretório raiz.
 
 ## Licença
 
-Educacional. Não substitui análise profissional de M&A — para decisões reais de venda, captação ou fusão, consulte um analista financeiro qualificado.
+Educacional. Não substitui análise profissional de Fusões e Aquisições (M&A) — para decisões reais de venda, captação ou fusão, consulte um analista financeiro qualificado.

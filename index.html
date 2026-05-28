@@ -92,10 +92,6 @@
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           <span class="hidden sm:inline">Cenários</span>
         </button>
-        <button id="btn-glossary" class="px-3 py-2 text-sm rounded-lg hover:bg-white/5 text-slate-300 transition flex items-center gap-2" title="Glossário">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          <span class="hidden sm:inline">Glossário</span>
-        </button>
         <button id="btn-theme" class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
           <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -111,7 +107,7 @@
 
   <main class="relative z-10 max-w-6xl mx-auto px-6 py-8 md:py-12">
 
-    <!-- Hero -->
+    <!-- Hero 
     <section id="hero" class="text-center mb-10 md:mb-14">
       <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-brand-400 mb-4">
         <span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse"></span>
@@ -123,7 +119,7 @@
       <p class="text-slate-400 max-w-2xl mx-auto">
         Avaliação multimetodologia cruzando DCF, múltiplos de mercado, patrimônio e custo de reposição.
       </p>
-    </section>
+    </section>-->
 
     <!-- Wizard Layout: Sidebar + Conteúdo -->
     <div class="grid lg:grid-cols-[260px_1fr] gap-6 items-start">
@@ -143,15 +139,18 @@
           <div class="sidebar-section-title">Etapas</div>
           <div id="sidebar-steps" class="space-y-0.5">
             <div class="sidebar-item active" data-step-target="1">
-              <span class="icon">●</span> <span>Perfil & Risco</span>
+              <span class="icon">●</span> <span>Perfil & Setor</span>
             </div>
             <div class="sidebar-item locked" data-step-target="2">
-              <span class="icon">○</span> <span>Financeiro</span>
+              <span class="icon">○</span> <span>Riscos & Maturidade</span>
             </div>
             <div class="sidebar-item locked" data-step-target="3">
-              <span class="icon">○</span> <span>Patrimônio</span>
+              <span class="icon">○</span> <span>Financeiro</span>
             </div>
             <div class="sidebar-item locked" data-step-target="4">
+              <span class="icon">○</span> <span>Patrimônio</span>
+            </div>
+            <div class="sidebar-item locked" data-step-target="5">
               <span class="icon">○</span> <span>Resultados</span>
             </div>
           </div>
@@ -167,6 +166,14 @@
 
         <div class="space-y-6">
           <div>
+            <label for="company-name" class="block text-sm font-medium text-slate-300 mb-2">
+              Nome da empresa
+              <span class="tooltip" data-tip="Aparece no relatório PDF e é usado como nome padrão ao salvar um cenário.">ⓘ</span>
+            </label>
+            <input type="text" id="company-name" name="company-name" maxlength="80" placeholder="Ex: Escola Online LTDA" class="input-base" autocomplete="organization">
+          </div>
+
+          <div>
             <label class="block text-sm font-medium text-slate-300 mb-3">
               Setor / Tipo de negócio
               <span class="tooltip" data-tip="Define faixas típicas de múltiplos (receita e EBITDA), margem saudável e taxa de crescimento esperada. Você pode ajustar manualmente no dashboard.">ⓘ</span>
@@ -175,6 +182,60 @@
               <!-- Inserido dinamicamente -->
             </div>
             <div id="sector-info" class="mt-3 text-xs text-slate-400 leading-relaxed"></div>
+
+            <!-- Painel para setor Personalizado -->
+            <div id="custom-preset-panel" class="hidden mt-4 p-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5">
+              <div class="text-xs uppercase tracking-wider text-cyan-300 font-semibold mb-3">
+                Defina as faixas do seu setor
+              </div>
+              <div class="grid sm:grid-cols-2 gap-x-5 gap-y-3 text-sm">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Múltiplo EBITDA</label>
+                  <div class="flex items-center gap-2">
+                    <input type="number" id="custom-eb-min" min="0" max="20" step="0.1" class="custom-input" placeholder="min">
+                    <span class="text-slate-500">–</span>
+                    <input type="number" id="custom-eb-max" min="0" max="20" step="0.1" class="custom-input" placeholder="max">
+                    <span class="text-xs text-slate-500">×</span>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Múltiplo Receita</label>
+                  <div class="flex items-center gap-2">
+                    <input type="number" id="custom-rev-min" min="0" max="15" step="0.1" class="custom-input" placeholder="min">
+                    <span class="text-slate-500">–</span>
+                    <input type="number" id="custom-rev-max" min="0" max="15" step="0.1" class="custom-input" placeholder="max">
+                    <span class="text-xs text-slate-500">×</span>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Margem saudável (%)</label>
+                  <div class="flex items-center gap-2">
+                    <input type="number" id="custom-margin-min" min="0" max="80" step="1" class="custom-input" placeholder="min">
+                    <span class="text-slate-500">–</span>
+                    <input type="number" id="custom-margin-max" min="0" max="80" step="1" class="custom-input" placeholder="max">
+                    <span class="text-xs text-slate-500">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Crescimento esperado a.a. (%)</label>
+                  <div class="flex items-center gap-2">
+                    <input type="number" id="custom-growth" min="-20" max="60" step="0.5" class="custom-input" style="width:100%" placeholder="ex: 15">
+                    <span class="text-xs text-slate-500">%</span>
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-3 leading-relaxed">
+                Estas faixas valem para os múltiplos interpolados e a margem saudável. Você pode refinar ainda mais com os sliders no dashboard.
+              </p>
+              <div class="flex flex-wrap gap-2 mt-4 pt-3 border-t border-white/5">
+                <button type="button" id="btn-custom-save" class="custom-action-btn custom-action-primary">
+                  💾 Salvar Dados
+                </button>
+                <button type="button" id="btn-custom-reset" class="custom-action-btn">
+                  ↻ Restaurar Padrão
+                </button>
+              </div>
+            </div>
           </div>
 
           <div>
@@ -197,29 +258,60 @@
 
               <div class="grid grid-cols-3 gap-3 pt-4 border-t border-white/5 text-center">
                 <div>
-                  <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">% recorrente</div>
+                  <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                    % recorrente
+                    <span class="tooltip" data-tip="Fração da receita que vem de assinaturas/recorrência (MRR) versus vendas avulsas. Receita recorrente vale mais — previsibilidade reduz risco e aumenta os múltiplos."></span>
+                  </div>
                   <div id="recurring-display" class="font-display font-bold text-lg text-slate-100">100%</div>
                 </div>
                 <div>
-                  <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Múlt. receita</div>
+                  <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                    Múlt. receita
+                    <span class="tooltip" data-tip="Avaliação rápida: faturamento bruto × este fator. A faixa depende do setor (ex: EdTech 1.5–3×, SaaS B2B até 8×). Útil quando a empresa ainda não tem lucro consolidado."></span>
+                  </div>
                   <div id="multiple-revenue" class="font-display font-bold text-lg text-cyan-400">2.00×</div>
                 </div>
                 <div>
-                  <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Múlt. EBITDA</div>
+                  <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                    Múlt. EBITDA
+                    <span class="tooltip" data-tip="EBITDA × fator setorial (3×–12× conforme o setor). É o múltiplo 'rei' em transações reais de Fusões e Aquisições (M&A). +0.5× se a empresa tem mais de 3 anos."></span>
+                  </div>
                   <div id="multiple-ebitda" class="font-display font-bold text-lg text-violet-400">6.50×</div>
                 </div>
               </div>
               <p class="text-xs text-slate-500 mt-3 leading-relaxed">
                 Ex: se 60% do faturamento vem de assinaturas e 40% de cursos avulsos, ajuste para <strong class="text-slate-300">60%</strong>.
               </p>
+              <div class="flex flex-wrap gap-2 mt-4 pt-3 border-t border-white/5">
+                <button type="button" id="btn-recurring-save" class="custom-action-btn custom-action-primary">
+                  💾 Salvar Dados
+                </button>
+                <button type="button" id="btn-recurring-reset" class="custom-action-btn">
+                  ↻ Restaurar Padrão
+                </button>
+              </div>
             </div>
           </div>
 
+          <!-- Ajustes finos: WACC, crescimento e múltiplos manuais -->
+          <div id="fine-tune-container">
+            <!-- Renderizado dinamicamente por wizard.js -->
+          </div>
+
+        </div>
+      </div>
+
+      <!-- STEP 2: Riscos & Maturidade -->
+      <div data-step="2" class="step-panel hidden">
+        <h3 class="font-display text-2xl font-bold mb-2">Riscos & maturidade</h3>
+        <p class="text-slate-400 text-sm mb-6">Fatores qualitativos que ajustam o valuation final.</p>
+
+        <div class="space-y-6">
           <div class="grid md:grid-cols-2 gap-6">
             <div>
               <label class="block text-sm font-medium text-slate-300 mb-3">
                 Momento da empresa
-                <span class="tooltip" data-tip="Define a taxa de crescimento usada no DCF. Você pode refinar depois com o slider no dashboard.">ⓘ</span>
+                <span class="tooltip" data-tip="Define a taxa de crescimento padrão usada no DCF: Crescendo Muito = 25% a.a., Moderadamente = 15%, Estagnada = 3%, Dificuldades = -5%, Não opera = 0%. Pode ser refinada manualmente nos Ajustes Finos do passo anterior."></span>
               </label>
               <div class="pill-grid" data-group="companyMoment">
                 <button type="button" class="pill-btn active" data-value="growing_fast">💎 Crescendo Muito</button>
@@ -233,7 +325,7 @@
             <div>
               <label class="block text-sm font-medium text-slate-300 mb-3">
                 Dependência dos sócios
-                <span class="tooltip" data-tip="O quanto a operação depende da presença direta dos fundadores. Aplica desconto escalonado: 0% a 25%.">ⓘ</span>
+                <span class="tooltip" data-tip="Quando a marca está colada à pessoa do dono (ex: 'curso do João'), o negócio vale menos — risco alto se o fundador sair. Aplicamos desconto escalonado conforme o nível: Nenhuma 0%, Pouco 5%, Médio 10%, Muito 17%, Totalmente 25%."></span>
               </label>
               <div class="pill-grid" data-group="founder">
                 <button type="button" class="pill-btn" data-value="none">Nenhuma Dependência</button>
@@ -245,9 +337,12 @@
             </div>
           </div>
 
-          <div class="grid md:grid-cols-3 gap-5">
+          <div class="grid md:grid-cols-2 gap-5">
             <div>
-              <label for="age" class="block text-sm font-medium text-slate-300 mb-3">Tempo de mercado</label>
+              <label for="age" class="block text-sm font-medium text-slate-300 mb-3">
+                Tempo de mercado
+                <span class="tooltip" data-tip="Maturidade da empresa. Empresas com mais de 3 anos ganham +0.5× no múltiplo de EBITDA — mercado paga prêmio por histórico comprovado."></span>
+              </label>
               <select id="age" name="age" class="input-base">
                 <option value="lt1">Menos de 1 ano</option>
                 <option value="1to3" selected>De 1 a 3 anos</option>
@@ -264,26 +359,12 @@
                 <button type="button" class="pill-btn" data-value="yes">Sim (+5%)</button>
               </div>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-3">
-                Funcionários
-                <span class="tooltip" data-tip="Opcional. Aparece apenas no relatório, não afeta o cálculo.">ⓘ</span>
-              </label>
-              <select id="employees" class="input-base">
-                <option value="">— Não informar —</option>
-                <option value="lt10">Menos de 10</option>
-                <option value="11to49">11 a 49</option>
-                <option value="50to99">50 a 99</option>
-                <option value="100to499">100 a 499</option>
-                <option value="gt500">Mais de 500</option>
-              </select>
-            </div>
           </div>
         </div>
       </div>
 
-      <!-- STEP 2: Financeiro -->
-      <div data-step="2" class="step-panel hidden">
+      <!-- STEP 3: Financeiro -->
+      <div data-step="3" class="step-panel hidden">
         <div class="flex items-start justify-between gap-4 flex-wrap mb-6">
           <div>
             <h3 class="font-display text-2xl font-bold mb-1">Dados financeiros</h3>
@@ -322,19 +403,22 @@
           <!-- Resumo EBITDA + Lucro -->
           <div class="grid sm:grid-cols-3 gap-3 pt-4 border-t border-white/10">
             <div class="p-4 rounded-xl bg-white/[0.02] border border-white/5">
-              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Faturamento <span id="period-label-revenue">anual</span></div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
+                Faturamento <span id="period-label-revenue">anual</span>
+                <span class="tooltip" data-tip="Faturamento bruto: receita total gerada antes de qualquer dedução (impostos, custos, despesas).">ⓘ</span>
+              </div>
               <div class="font-display font-bold text-xl text-slate-200" id="summary-revenue">R$ 0</div>
             </div>
             <div class="p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/20">
               <div class="text-[10px] uppercase tracking-wider text-cyan-300 mb-1 flex items-center gap-1">
-                EBITDA <span class="tooltip" data-tip="Faturamento − Custos − Despesas. É a base do nosso cálculo de valuation.">ⓘ</span>
+                EBITDA <span class="tooltip" data-tip="Lucro Antes de Juros, Impostos, Depreciação e Amortização. Reflete a geração de caixa puramente operacional. Calculado aqui como: Faturamento − Custos − Despesas.">ⓘ</span>
               </div>
               <div class="font-display font-bold text-xl text-cyan-300" id="summary-ebitda">R$ 0</div>
               <div class="text-xs text-slate-500 mt-0.5" id="summary-ebitda-margin">margem 0%</div>
             </div>
             <div class="p-4 rounded-xl bg-white/[0.02] border border-white/5">
               <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
-                Lucro líquido <span class="tooltip" data-tip="EBITDA − Impostos − Depreciação + Receitas financeiras − Despesas financeiras. Apenas referência.">ⓘ</span>
+                Lucro líquido <span class="tooltip" data-tip="EBITDA − Impostos − Depreciação + Receitas financeiras − Despesa financeira. É o resultado final da empresa, depois de todas as deduções.">ⓘ</span>
               </div>
               <div class="font-display font-bold text-xl text-slate-200" id="summary-net">R$ 0</div>
             </div>
@@ -344,8 +428,8 @@
         </div>
       </div>
 
-      <!-- STEP 3: Patrimônio -->
-      <div data-step="3" class="step-panel hidden">
+      <!-- STEP 4: Patrimônio -->
+      <div data-step="4" class="step-panel hidden">
         <h3 class="font-display text-2xl font-bold mb-2">Patrimônio & investimento</h3>
         <p class="text-slate-400 text-sm mb-6">Base para os métodos de valor patrimonial e custo de reposição.</p>
 
@@ -374,8 +458,8 @@
         </div>
       </div>
 
-      <!-- STEP 4: Resultados (renderizado dinamicamente) -->
-      <div data-step="4" class="step-panel hidden">
+      <!-- STEP 5: Resultados (renderizado dinamicamente) -->
+      <div data-step="5" class="step-panel hidden">
         <div id="results-container"></div>
       </div>
 
@@ -393,22 +477,9 @@
     <!-- /grid sidebar + wizard -->
 
     <footer class="text-center text-xs text-slate-500 mt-12 pb-6">
-      Cálculos baseados em metodologias consagradas (DCF, múltiplos setoriais, NAV).
-      Esta ferramenta é educacional — para decisões de M&A, consulte um analista financeiro.
+      Cálculos baseados em metodologias consagradas (DCF- Fluxo de Caixa Descontado, múltiplos setoriais, NAV - Ativo Líquido). Comumente usadas em transações de Fusões e Aquisições (M&A).
     </footer>
   </main>
-
-  <!-- Modal: Glossário -->
-  <div id="modal-glossary" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-display text-xl font-bold">Glossário</h3>
-        <button class="modal-close text-slate-400 hover:text-white text-2xl leading-none">×</button>
-      </div>
-      <div id="glossary-list" class="space-y-4 text-sm"></div>
-    </div>
-  </div>
 
   <!-- Modal: Cenários -->
   <div id="modal-scenarios" class="modal hidden">

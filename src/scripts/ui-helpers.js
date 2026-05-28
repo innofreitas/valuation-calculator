@@ -2,7 +2,6 @@
 // Tooltips flutuantes, modais, toasts
 // ============================================
 
-import { GLOSSARY } from '../data/glossary.js';
 import { listScenarios, deleteScenario } from './storage.js';
 import { formatBRL, formatPercent } from './utils.js';
 
@@ -74,17 +73,6 @@ export function initModalCloseHandlers() {
       document.body.style.overflow = '';
     }
   });
-}
-
-/** Glossário modal */
-export function renderGlossary() {
-  const $list = document.getElementById('glossary-list');
-  $list.innerHTML = GLOSSARY.map(item => `
-    <div class="pb-3 border-b border-white/5 last:border-b-0 last:pb-0">
-      <div class="font-semibold text-brand-400 mb-1">${item.term}</div>
-      <div class="text-slate-300 leading-relaxed">${item.def}</div>
-    </div>
-  `).join('');
 }
 
 /** Cenários modal */

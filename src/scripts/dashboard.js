@@ -4,10 +4,10 @@
 
 import {
   fullCalculation, METHOD_META, DEFAULT_PARAMS, initialGrowthFor,
-  getSectorPreset, revenueMultipleFor, ebitdaMultipleFor,
+  effectivePreset, revenueMultipleFor, ebitdaMultipleFor,
 } from './valuation.js';
 import { formatBRL, formatBRLFull, formatPercent } from './utils.js';
-import { BENCHMARKS } from '../data/glossary.js';
+import { BENCHMARKS, TIPS } from '../data/glossary.js';
 
 export class Dashboard {
   constructor({ container, onSave, onShare, onExport }) {
@@ -23,7 +23,10 @@ export class Dashboard {
 
   render(inputs) {
     this.state = { ...inputs, manualMultiples: { ...(inputs.manualMultiples || { revenue: null, ebitda: null }) } };
-    this.params = { ...DEFAULT_PARAMS, growth: initialGrowthFor(inputs) };
+    // Params vêm dos overrides do passo 1 OU dos defaults do preset/momento
+    const wacc = typeof inputs.wacc === 'number' ? inputs.wacc : DEFAULT_PARAMS.wacc;
+    const growth = typeof inputs.growth === 'number' ? inputs.growth : initialGrowthFor(inputs);
+    this.params = { ...DEFAULT_PARAMS, wacc, growth };
     this._recalc();
     this._mount();
     this._initChart();
@@ -43,7 +46,15 @@ export class Dashboard {
 
         <!-- Hero: Valuation Final (FAIXA) -->
         <div class="text-center py-6 md:py-8 fade-up">
-          <div class="text-xs uppercase tracking-[0.2em] text-slate-400 mb-3">Valuation estimado</div>
+          ${this.state.companyName ? `
+            <div class="font-display text-lg md:text-xl font-semibold text-slate-200 mb-1">
+              ${this.state.companyName}
+            </div>
+          ` : ''}
+          <div class="text-xs uppercase tracking-[0.2em] text-slate-400 mb-3">
+            Valuation estimado
+            <span class="tooltip" data-tip="${TIPS.valuation}"></span>
+          </div>
           <div class="flex items-baseline justify-center gap-3 flex-wrap font-display font-extrabold leading-tight">
             <span class="text-2xl md:text-4xl text-slate-500">Entre</span>
             <span id="hero-low" class="text-4xl md:text-6xl bg-gradient-to-br from-cyan-400 via-white to-violet-400 bg-clip-text text-transparent">
@@ -55,11 +66,11 @@ export class Dashboard {
             </span>
           </div>
           <div class="mt-3 flex items-center justify-center gap-2 text-sm text-slate-400">
-            <span>Valor central:</span>
+            <span>Valor central<span class="tooltip" data-tip="${TIPS.centerValue}"></span>:</span>
             <span id="hero-center" class="font-semibold text-slate-200">${formatBRL(consolidated.final)}</span>
             <span class="text-slate-600">·</span>
             <span id="hero-band" class="text-slate-500">banda ±${(this.calc.range.bandPct*100).toFixed(0)}%</span>
-            <span class="tooltip" data-tip="A faixa reflete a dispersão entre os 5 métodos de valuation. Métodos concordando → faixa estreita; métodos divergindo → faixa larga (até ±30%).">ⓘ</span>
+            <span class="tooltip" data-tip="${TIPS.range}"></span>
           </div>
           <div class="mt-4 flex items-center justify-center gap-2 flex-wrap">
             ${consolidated.penaltyApplied ? `
@@ -79,7 +90,9 @@ export class Dashboard {
         <div class="glass-soft rounded-2xl p-5 md:p-6 fade-up">
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <div class="flex-1 min-w-[200px]">
-              <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Margem EBITDA</div>
+              <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">
+                Margem EBITDA <span class="tooltip" data-tip="${TIPS.marginEbitda}"></span>
+              </div>
               <div class="font-display text-3xl md:text-4xl font-bold">${formatPercent(margin.value)}</div>
               <span class="badge badge-${margin.tier} mt-2">${margin.label}</span>
             </div>
@@ -109,20 +122,29 @@ export class Dashboard {
 
         <!-- Benchmark -->
         <div class="glass-soft rounded-2xl p-5 md:p-6 fade-up">
-          <h4 class="font-display font-semibold mb-3">Benchmark setorial — ${bench.label}</h4>
+          <h4 class="font-display font-semibold mb-3">
+            Benchmark setorial — ${bench.label}
+            <span class="tooltip" data-tip="${TIPS.benchmark}"></span>
+          </h4>
           <div class="grid sm:grid-cols-3 gap-4 text-sm">
             <div>
-              <div class="text-xs text-slate-400 mb-1">Múltiplo de receita (mediana)</div>
+              <div class="text-xs text-slate-400 mb-1">
+                Múltiplo de receita (mediana) <span class="tooltip" data-tip="${TIPS.revenueMultiple}"></span>
+              </div>
               <div class="font-display text-xl">${bench.revenueMultiple.median.toFixed(1)}x</div>
               <div class="text-xs text-slate-500">Faixa: ${bench.revenueMultiple.min}x – ${bench.revenueMultiple.max}x</div>
             </div>
             <div>
-              <div class="text-xs text-slate-400 mb-1">Múltiplo de EBITDA (mediana)</div>
+              <div class="text-xs text-slate-400 mb-1">
+                Múltiplo de EBITDA (mediana) <span class="tooltip" data-tip="${TIPS.ebitdaMultiple}"></span>
+              </div>
               <div class="font-display text-xl">${bench.ebitdaMultiple.median.toFixed(1)}x</div>
               <div class="text-xs text-slate-500">Faixa: ${bench.ebitdaMultiple.min}x – ${bench.ebitdaMultiple.max}x</div>
             </div>
             <div>
-              <div class="text-xs text-slate-400 mb-1">Margem EBITDA saudável</div>
+              <div class="text-xs text-slate-400 mb-1">
+                Margem EBITDA saudável <span class="tooltip" data-tip="${TIPS.marginEbitda}"></span>
+              </div>
               <div class="font-display text-xl">${bench.healthyMargin.min}–${bench.healthyMargin.max}%</div>
               <div class="text-xs text-slate-500">Para o setor de EAD</div>
             </div>
@@ -153,78 +175,52 @@ export class Dashboard {
   }
 
   _renderSensitivityCard() {
-    const preset = getSectorPreset(this.state.sector);
-    const revRange = preset.revenueMultiple;
-    const ebRange = preset.ebitdaMultiple;
+    const preset = effectivePreset(this.state);
     const ratio = typeof this.state.recurringRatio === 'number' ? this.state.recurringRatio : 1;
-
     const manualRev = this.state.manualMultiples?.revenue;
     const manualEb = this.state.manualMultiples?.ebitda;
-    const currentRev = revenueMultipleFor(ratio, this.state.sector, manualRev);
-    const currentEb = ebitdaMultipleFor(ratio, this.state.sector, manualEb);
+    const currentRev = revenueMultipleFor(ratio, preset, manualRev);
+    const currentEb = ebitdaMultipleFor(ratio, preset, manualEb);
 
     return `
       <div class="glass-soft rounded-2xl p-5 md:p-6 fade-up">
-        <div class="flex items-center justify-between gap-3 mb-1 flex-wrap">
+        <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <div class="flex items-center gap-2">
             <svg class="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <h4 class="font-display font-semibold">Ajustes finos</h4>
+            <h4 class="font-display font-semibold">Premissas usadas no cálculo</h4>
           </div>
-          <button id="btn-reset-multiples" class="text-xs px-3 py-1 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 transition">
-            ↻ Resetar para o setor (${preset.label})
+          <button id="btn-edit-premises" class="text-xs px-3 py-1 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 transition">
+            ✎ Editar no passo 1
           </button>
         </div>
-        <p class="text-xs text-slate-400 mb-5">Ajuste WACC, crescimento e múltiplos para refletir suas premissas. Tudo recalcula em tempo real.</p>
 
-        <div class="grid md:grid-cols-2 gap-x-6 gap-y-5">
-          <div>
-            <div class="flex justify-between text-sm mb-2">
-              <label class="text-slate-300">Taxa de desconto (WACC)</label>
-              <span id="wacc-display" class="font-mono text-cyan-400">${(this.params.wacc*100).toFixed(1)}%</span>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+              WACC <span class="tooltip" data-tip="Custo Médio Ponderado de Capital. Taxa de desconto usada no DCF. Para negócios digitais brasileiros, 18%–25% é a faixa usual."></span>
             </div>
-            <input type="range" id="wacc-slider" min="15" max="30" step="0.5" value="${this.params.wacc*100}" class="slider w-full">
-            <div class="flex justify-between text-xs text-slate-600 mt-1"><span>15%</span><span>30%</span></div>
+            <div class="font-display font-bold text-lg text-cyan-400">${(this.params.wacc*100).toFixed(1)}%</div>
           </div>
-          <div>
-            <div class="flex justify-between text-sm mb-2">
-              <label class="text-slate-300">Crescimento anual EBITDA</label>
-              <span id="growth-display" class="font-mono text-violet-400">${(this.params.growth*100).toFixed(1)}%</span>
+          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+              Crescimento EBITDA <span class="tooltip" data-tip="Taxa anual de crescimento projetada para os próximos 5 anos no DCF."></span>
             </div>
-            <input type="range" id="growth-slider" min="-10" max="40" step="0.5" value="${this.params.growth*100}" class="slider w-full">
-            <div class="flex justify-between text-xs text-slate-600 mt-1"><span>-10%</span><span>40%</span></div>
+            <div class="font-display font-bold text-lg text-violet-400">${(this.params.growth*100).toFixed(1)}%</div>
           </div>
-
-          <div>
-            <div class="flex justify-between text-sm mb-2">
-              <label class="text-slate-300">
-                Múltiplo de Receita
-                <span class="tooltip" data-tip="Aplicado ao faturamento bruto. Faixa típica do setor: ${revRange.min}–${revRange.max}×.">ⓘ</span>
-              </label>
-              <span id="mult-rev-display" class="font-mono text-cyan-400">${currentRev.toFixed(2)}×</span>
+          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+              Múlt. Receita <span class="tooltip" data-tip="${METHOD_META.revenue.tip}"></span>
             </div>
-            <input type="range" id="mult-rev-slider" min="${revRange.min}" max="${revRange.max}" step="0.05" value="${currentRev}" class="slider w-full">
-            <div class="flex justify-between text-xs text-slate-600 mt-1">
-              <span>${revRange.min}×</span>
-              <span class="text-slate-500" title="Default do setor">↑ ${revRange.default}×</span>
-              <span>${revRange.max}×</span>
-            </div>
+            <div class="font-display font-bold text-lg text-cyan-400">${currentRev.toFixed(2)}×</div>
           </div>
-          <div>
-            <div class="flex justify-between text-sm mb-2">
-              <label class="text-slate-300">
-                Múltiplo de EBITDA
-                <span class="tooltip" data-tip="Aplicado ao EBITDA. Faixa típica do setor: ${ebRange.min}–${ebRange.max}×. ${this.state.age === 'gt3' ? '+0.5× por empresa madura.' : ''}">ⓘ</span>
-              </label>
-              <span id="mult-eb-display" class="font-mono text-violet-400">${currentEb.toFixed(2)}×</span>
+          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+              Múlt. EBITDA <span class="tooltip" data-tip="${METHOD_META.ebitda.tip}"></span>
             </div>
-            <input type="range" id="mult-eb-slider" min="${ebRange.min}" max="${ebRange.max}" step="0.05" value="${currentEb}" class="slider w-full">
-            <div class="flex justify-between text-xs text-slate-600 mt-1">
-              <span>${ebRange.min}×</span>
-              <span class="text-slate-500" title="Default do setor">↑ ${ebRange.default}×</span>
-              <span>${ebRange.max}×</span>
-            </div>
+            <div class="font-display font-bold text-lg text-violet-400">${currentEb.toFixed(2)}×</div>
           </div>
         </div>
+        <p class="text-xs text-slate-500 mt-3">Setor: <strong class="text-slate-300">${preset.label}</strong> · Ajuste essas premissas voltando ao passo "Perfil & Setor".</p>
       </div>
     `;
   }
@@ -241,7 +237,10 @@ export class Dashboard {
       return `
         <div class="p-3 rounded-xl bg-white/[0.02] border border-white/5">
           <div class="flex items-center justify-between text-xs mb-1.5">
-            <span class="font-medium text-slate-300">${meta.short}</span>
+            <span class="font-medium text-slate-300">
+              ${meta.short}
+              <span class="tooltip" data-tip="${meta.tip}"></span>
+            </span>
             <span class="text-slate-500">peso ${(meta.weight*100).toFixed(0)}%</span>
           </div>
           <div class="font-display font-semibold text-base">${formatBRL(val)}</div>
@@ -352,56 +351,15 @@ export class Dashboard {
   }
 
   _bindSliders() {
-    const waccSlider = document.getElementById('wacc-slider');
-    const growthSlider = document.getElementById('growth-slider');
-    const multRevSlider = document.getElementById('mult-rev-slider');
-    const multEbSlider = document.getElementById('mult-eb-slider');
-    const waccDisplay = document.getElementById('wacc-display');
-    const growthDisplay = document.getElementById('growth-display');
-    const multRevDisplay = document.getElementById('mult-rev-display');
-    const multEbDisplay = document.getElementById('mult-eb-display');
-
-    const onChange = () => {
-      this.params.wacc = parseFloat(waccSlider.value) / 100;
-      this.params.growth = parseFloat(growthSlider.value) / 100;
-      this.state.manualMultiples = {
-        revenue: parseFloat(multRevSlider.value),
-        ebitda: parseFloat(multEbSlider.value),
-      };
-      waccDisplay.textContent = `${parseFloat(waccSlider.value).toFixed(1)}%`;
-      growthDisplay.textContent = `${parseFloat(growthSlider.value).toFixed(1)}%`;
-      multRevDisplay.textContent = `${parseFloat(multRevSlider.value).toFixed(2)}×`;
-      multEbDisplay.textContent = `${parseFloat(multEbSlider.value).toFixed(2)}×`;
-      this._recalc();
-      this._updateHero();
-      this._renderMethodsList();
-      this._updateChart();
-    };
-
-    waccSlider.addEventListener('input', onChange);
-    growthSlider.addEventListener('input', onChange);
-    multRevSlider.addEventListener('input', onChange);
-    multEbSlider.addEventListener('input', onChange);
-
-    // Reset para defaults do setor
-    document.getElementById('btn-reset-multiples')?.addEventListener('click', () => {
-      const preset = getSectorPreset(this.state.sector);
-      this.state.manualMultiples = { revenue: null, ebitda: null };
-      this.params.growth = initialGrowthFor(this.state);
-      this._recalc();
-      // Re-monta o card pra sincronizar todos os displays
-      const $card = document.querySelector('#results-card');
-      if ($card) {
-        const $sensitivity = $card.querySelector('.glass-soft .font-display.font-semibold')?.closest('.glass-soft');
-        if ($sensitivity) {
-          $sensitivity.outerHTML = this._renderSensitivityCard();
-          this._bindSliders();
-        }
-      }
-      this._updateHero();
-      this._renderMethodsList();
-      this._updateChart();
-    });
+    // Botão "Editar no passo 1" volta para o wizard, passo Perfil & Setor
+    const btn = document.getElementById('btn-edit-premises');
+    if (btn && window.wizardInstance) {
+      btn.addEventListener('click', () => {
+        window.wizardInstance.current = 1;
+        window.wizardInstance._render();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
   }
 
   _updateHero() {

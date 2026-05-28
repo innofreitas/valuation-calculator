@@ -2,7 +2,7 @@
 // Exportação de PDF e share via URL
 // ============================================
 
-import { METHOD_META } from './valuation.js';
+import { METHOD_META, effectivePreset, SECTOR_PRESETS } from './valuation.js';
 import { formatBRL, formatBRLFull, formatPercent, encodeState } from './utils.js';
 
 export async function exportPDF(calc) {
@@ -16,17 +16,22 @@ export async function exportPDF(calc) {
 
   // Header
   doc.setFillColor(2, 6, 23);
-  doc.rect(0, 0, pageW, 90, 'F');
+  doc.rect(0, 0, pageW, 100, 'F');
   doc.setTextColor(255);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('Relatório de Valuation', margin_, 50);
+  doc.text('Relatório de Valuation', margin_, 42);
+  if (inputs.companyName) {
+    doc.setFontSize(13);
+    doc.setTextColor(103, 232, 249);
+    doc.text(inputs.companyName, margin_, 64);
+  }
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(150);
-  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`, margin_, 70);
+  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`, margin_, inputs.companyName ? 84 : 70);
 
-  y = 130;
+  y = inputs.companyName ? 140 : 130;
   doc.setTextColor(20);
 
   // Valuation final como faixa
@@ -90,16 +95,18 @@ export async function exportPDF(calc) {
     growing_fast: 'Crescendo Muito', growing_moderate: 'Crescendo Moderadamente',
     stagnant: 'Estagnada', difficulties: 'Dificuldades Financeiras', not_operating: 'Não opera',
   };
-  const empLabels = {
-    lt10: '< 10', '11to49': '11 a 49', '50to99': '50 a 99', '100to499': '100 a 499', gt500: '> 500',
-  };
+  const preset = effectivePreset(inputs);
+  const sectorLine = inputs.sector === 'custom'
+    ? `Personalizado · EBITDA ${preset.ebitdaMultiple.min}–${preset.ebitdaMultiple.max}×, Receita ${preset.revenueMultiple.min}–${preset.revenueMultiple.max}×`
+    : preset.label.replace(/[^\w\sÀ-ÿ]/g, '').trim();
+
   const summary = [
+    ['Setor / Tipo de negócio', sectorLine],
     ['Composição da receita', ratioLabel],
     ['Dependência dos sócios', founderLabels[inputs.founder] || inputs.founder || '—'],
     ['Momento da empresa', momentLabels[inputs.companyMoment] || '—'],
     ['Marca registrada', inputs.trademark ? 'Sim (+5%)' : 'Não'],
     ['Tempo de mercado', inputs.age === 'lt1' ? '< 1 ano' : inputs.age === '1to3' ? '1 a 3 anos' : '> 3 anos'],
-    ...(inputs.employees ? [['Funcionários', empLabels[inputs.employees] || inputs.employees]] : []),
     ['Faturamento anual', formatBRL(inputs.revenue)],
     ['EBITDA anual', formatBRL(inputs.ebitda)],
     ['Investimento inicial', formatBRL(inputs.investment)],
@@ -156,7 +163,7 @@ export async function exportPDF(calc) {
   doc.setFontSize(8);
   doc.setTextColor(140);
   const footerY = doc.internal.pageSize.getHeight() - 30;
-  doc.text('Relatório educacional gerado pela Calculadora de Valuation. Não substitui análise profissional de M&A.', margin_, footerY);
+  doc.text('Relatório educacional gerado pela Calculadora de Valuation. Não substitui análise profissional de Fusões e Aquisições (M&A).', margin_, footerY);
 
   const filename = `valuation-${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(filename);

@@ -7,12 +7,13 @@
  * Presets de setor — cada um define faixas típicas de múltiplos, margem e
  * crescimento. Usuário pode ajustar manualmente no dashboard.
  *
- * Faixas baseadas em benchmarks públicos de M&A (Brasil + global).
+ * Faixas baseadas em benchmarks públicos de Fusões e Aquisições — M&A (Brasil + global).
  */
 export const SECTOR_PRESETS = {
   edtech_subscription: {
     label: '🎓 EdTech Subscription',
     description: 'Plataformas EAD com mensalidade/assinatura recorrente',
+    tooltip: 'Plataforma de educação a distância com modelo de assinatura/mensalidade. A receita é altamente recorrente (MRR), o que reduz risco e eleva múltiplos. Faixa típica: múltiplo EBITDA 4–8×, múltiplo de receita 1.5–3×, margem saudável 25–45%, crescimento esperado 20% a.a.',
     ebitdaMultiple: { min: 4.0, default: 6.0, max: 8.0 },
     revenueMultiple: { min: 1.5, default: 2.0, max: 3.0 },
     healthyMargin: { min: 25, max: 45 },
@@ -22,6 +23,7 @@ export const SECTOR_PRESETS = {
   ead_hybrid: {
     label: '🎯 EAD Híbrido',
     description: 'Mix de assinatura + cursos avulsos',
+    tooltip: 'Negócios de EAD com mix entre assinatura (clube de membros, mensalidades) e vendas avulsas (cursos pontuais, lançamentos). Recorrência parcial, múltiplos intermediários. Faixa típica: múltiplo EBITDA 4–7.5×, múltiplo de receita 1.3–2.5×, margem saudável 20–40%, crescimento esperado 15% a.a.',
     ebitdaMultiple: { min: 4.0, default: 5.5, max: 7.5 },
     revenueMultiple: { min: 1.3, default: 1.8, max: 2.5 },
     healthyMargin: { min: 20, max: 40 },
@@ -31,6 +33,7 @@ export const SECTOR_PRESETS = {
   infoproduct: {
     label: '📚 Infoproduto',
     description: 'Cursos avulsos, lançamentos, vendas únicas',
+    tooltip: 'Infoprodutos vendidos avulsos: cursos pontuais, ebooks, lançamentos, mentorias. Sem recorrência — receita depende de novas vendas constantes. Múltiplos mais conservadores. Faixa típica: múltiplo EBITDA 3–7×, múltiplo de receita 1–2.5×, margem saudável 15–35%, crescimento esperado 10% a.a.',
     ebitdaMultiple: { min: 3.0, default: 5.0, max: 7.0 },
     revenueMultiple: { min: 1.0, default: 1.5, max: 2.5 },
     healthyMargin: { min: 15, max: 35 },
@@ -40,6 +43,7 @@ export const SECTOR_PRESETS = {
   saas_b2b: {
     label: '💻 SaaS B2B',
     description: 'Software empresarial com receita recorrente',
+    tooltip: 'Software corporativo (Software-as-a-Service) com receita 100% recorrente. Previsibilidade alta + LTV elevado = múltiplos mais altos do mercado. Faixa típica: múltiplo EBITDA 5–12×, múltiplo de receita 2–8×, margem saudável 20–45%, crescimento esperado 25% a.a.',
     ebitdaMultiple: { min: 5.0, default: 8.0, max: 12.0 },
     revenueMultiple: { min: 2.0, default: 4.0, max: 8.0 },
     healthyMargin: { min: 20, max: 45 },
@@ -49,6 +53,7 @@ export const SECTOR_PRESETS = {
   marketplace: {
     label: '🛒 Marketplace',
     description: 'Plataformas conectando vendedores e compradores',
+    tooltip: 'Plataformas que conectam vendedores e compradores cobrando comissão (take rate) sobre as transações. Margem operacional menor (logística, suporte, fraude), mas escala forte com efeito de rede. Faixa típica: múltiplo EBITDA 5–10×, múltiplo de receita 1.5–5×, margem saudável 10–30%, crescimento esperado 20% a.a.',
     ebitdaMultiple: { min: 5.0, default: 7.0, max: 10.0 },
     revenueMultiple: { min: 1.5, default: 3.0, max: 5.0 },
     healthyMargin: { min: 10, max: 30 },
@@ -58,6 +63,7 @@ export const SECTOR_PRESETS = {
   custom: {
     label: '⚙️ Personalizado',
     description: 'Defina seus próprios múltiplos',
+    tooltip: 'Use esta opção quando seu negócio não se encaixa nas categorias acima. Você define manualmente as faixas de múltiplo EBITDA, múltiplo de receita, margem saudável e crescimento esperado. Pode salvar suas faixas como padrão para reusar.',
     ebitdaMultiple: { min: 2.0, default: 5.0, max: 15.0 },
     revenueMultiple: { min: 0.5, default: 2.0, max: 10.0 },
     healthyMargin: { min: 10, max: 50 },
@@ -73,6 +79,27 @@ export const DEFAULT_SECTOR = 'ead_hybrid';
  */
 export function getSectorPreset(sectorKey) {
   return SECTOR_PRESETS[sectorKey] || SECTOR_PRESETS[DEFAULT_SECTOR];
+}
+
+/**
+ * Resolve preset efetivo considerando customPreset do usuário.
+ * Quando o setor é 'custom' E há customPreset definido, mescla os campos
+ * customizados sobre o preset padrão de 'custom'.
+ */
+export function effectivePreset(inputs) {
+  const key = inputs?.sector || DEFAULT_SECTOR;
+  const base = SECTOR_PRESETS[key] || SECTOR_PRESETS[DEFAULT_SECTOR];
+  if (key === 'custom' && inputs?.customPreset) {
+    const c = inputs.customPreset;
+    return {
+      ...base,
+      ebitdaMultiple:  { ...base.ebitdaMultiple,  ...(c.ebitdaMultiple  || {}) },
+      revenueMultiple: { ...base.revenueMultiple, ...(c.revenueMultiple || {}) },
+      healthyMargin:   { ...base.healthyMargin,   ...(c.healthyMargin   || {}) },
+      expectedGrowth:  typeof c.expectedGrowth === 'number' ? c.expectedGrowth : base.expectedGrowth,
+    };
+  }
+  return base;
 }
 
 export const DEFAULT_PARAMS = {
@@ -172,30 +199,34 @@ export function computeFinancials(revenue, components, mode = 'simple') {
 
 /**
  * Múltiplos interpolados pelo % de receita recorrente, dentro da faixa
- * do setor selecionado. ratio = 0 → min, ratio = 1 → max.
+ * do setor (ou preset custom). ratio = 0 → min, ratio = 1 → max.
  *
+ * O 2º parâmetro aceita string (key do setor) OU objeto preset já resolvido.
  * Se o usuário definiu um valor manual (manualOverride), ele tem precedência.
  */
-export function revenueMultipleFor(recurringRatio, sectorKey = DEFAULT_SECTOR, manualOverride = null) {
+function _resolvePreset(presetOrKey) {
+  if (presetOrKey && typeof presetOrKey === 'object') return presetOrKey;
+  return getSectorPreset(presetOrKey);
+}
+
+export function revenueMultipleFor(recurringRatio, presetOrKey = DEFAULT_SECTOR, manualOverride = null) {
   if (typeof manualOverride === 'number') return manualOverride;
   const r = Math.min(1, Math.max(0, recurringRatio));
-  const preset = getSectorPreset(sectorKey);
-  const { min, max } = preset.revenueMultiple;
+  const { min, max } = _resolvePreset(presetOrKey).revenueMultiple;
   return min + (max - min) * r;
 }
-export function ebitdaMultipleFor(recurringRatio, sectorKey = DEFAULT_SECTOR, manualOverride = null) {
+export function ebitdaMultipleFor(recurringRatio, presetOrKey = DEFAULT_SECTOR, manualOverride = null) {
   if (typeof manualOverride === 'number') return manualOverride;
   const r = Math.min(1, Math.max(0, recurringRatio));
-  const preset = getSectorPreset(sectorKey);
-  const { min, max } = preset.ebitdaMultiple;
+  const { min, max } = _resolvePreset(presetOrKey).ebitdaMultiple;
   return min + (max - min) * r;
 }
 
 /**
  * Método 1 — Múltiplo de Faturamento Bruto
  */
-export function calcRevenue(revenue, recurringRatio, sectorKey, manualOverride) {
-  return Math.max(0, revenue) * revenueMultipleFor(recurringRatio, sectorKey, manualOverride);
+export function calcRevenue(revenue, recurringRatio, presetOrKey, manualOverride) {
+  return Math.max(0, revenue) * revenueMultipleFor(recurringRatio, presetOrKey, manualOverride);
 }
 
 /**
@@ -203,9 +234,9 @@ export function calcRevenue(revenue, recurringRatio, sectorKey, manualOverride) 
  * +0.5 no múltiplo se empresa tem mais de 3 anos
  * Retorna 0 se EBITDA <= 0
  */
-export function calcEbitdaMultiple(ebitda, recurringRatio, age, sectorKey, manualOverride) {
+export function calcEbitdaMultiple(ebitda, recurringRatio, age, presetOrKey, manualOverride) {
   if (ebitda <= 0) return 0;
-  const base = ebitdaMultipleFor(recurringRatio, sectorKey, manualOverride);
+  const base = ebitdaMultipleFor(recurringRatio, presetOrKey, manualOverride);
   const maturityBonus = age === 'gt3' ? 0.5 : 0;
   return ebitda * (base + maturityBonus);
 }
@@ -244,12 +275,12 @@ export function calcReplacement(initialInvestment, multiplier = DEFAULT_PARAMS.r
  */
 export function calcAllMethods(inputs, params = DEFAULT_PARAMS) {
   const ratio = normalizeRecurringRatio(inputs);
-  const sectorKey = inputs.sector || DEFAULT_SECTOR;
+  const preset = effectivePreset(inputs);
   const manualRev = inputs.manualMultiples?.revenue;
   const manualEbitda = inputs.manualMultiples?.ebitda;
   return {
-    revenue: calcRevenue(inputs.revenue, ratio, sectorKey, manualRev),
-    ebitda: calcEbitdaMultiple(inputs.ebitda, ratio, inputs.age, sectorKey, manualEbitda),
+    revenue: calcRevenue(inputs.revenue, ratio, preset, manualRev),
+    ebitda: calcEbitdaMultiple(inputs.ebitda, ratio, inputs.age, preset, manualEbitda),
     dcf: calcDCF(inputs.ebitda, { wacc: params.wacc, growth: params.growth, years: params.dcfYears }),
     nav: calcNAV(inputs.assets),
     replacement: calcReplacement(inputs.investment, params.replacementMultiplier),
@@ -264,8 +295,9 @@ export function initialGrowthFor(inputs, defaultGrowth = DEFAULT_PARAMS.growth) 
   if (inputs.companyMoment && COMPANY_MOMENTS[inputs.companyMoment]) {
     return COMPANY_MOMENTS[inputs.companyMoment].growth;
   }
-  if (inputs.sector && SECTOR_PRESETS[inputs.sector]) {
-    return SECTOR_PRESETS[inputs.sector].expectedGrowth;
+  if (inputs.sector) {
+    const preset = effectivePreset(inputs);
+    if (typeof preset.expectedGrowth === 'number') return preset.expectedGrowth;
   }
   return defaultGrowth;
 }
@@ -314,12 +346,13 @@ export function consolidate(methods, inputs, params = DEFAULT_PARAMS) {
 }
 
 /**
- * Margem EBITDA (%) e classificação. Faixas vêm do setor selecionado.
+ * Margem EBITDA (%) e classificação. Faixas vêm do preset efetivo.
+ * Aceita string (sectorKey) ou objeto (preset já resolvido).
  */
-export function calcMargin(revenue, ebitda, sectorKey = DEFAULT_SECTOR) {
+export function calcMargin(revenue, ebitda, presetOrKey = DEFAULT_SECTOR) {
   if (revenue <= 0) return { value: 0, tier: 'low', label: 'Sem faturamento', message: '—', range: null };
   const value = (ebitda / revenue) * 100;
-  const preset = getSectorPreset(sectorKey);
+  const preset = _resolvePreset(presetOrKey);
   const { min, max } = preset.healthyMargin;
 
   let tier, label, message;
@@ -367,20 +400,36 @@ export function calcRange(methods, consolidated) {
  * Cálculo completo
  */
 export function fullCalculation(inputs, params = DEFAULT_PARAMS) {
+  const preset = effectivePreset(inputs);
   const methods = calcAllMethods(inputs, params);
   const consolidated = consolidate(methods, inputs, params);
-  const margin = calcMargin(inputs.revenue, inputs.ebitda, inputs.sector);
+  const margin = calcMargin(inputs.revenue, inputs.ebitda, preset);
   const range = calcRange(methods, consolidated);
-  return { methods, consolidated, range, margin, params, inputs };
+  return { methods, consolidated, range, margin, params, inputs, preset };
 }
 
 /**
  * Metadados dos métodos para UI
  */
 export const METHOD_META = {
-  revenue:     { label: 'Múltiplo de Faturamento',   short: 'Faturamento',  color: '#22d3ee', weight: 0.30 },
-  ebitda:      { label: 'Múltiplo de EBITDA',        short: 'EBITDA',       color: '#8b5cf6', weight: 0.35 },
-  dcf:         { label: 'Fluxo de Caixa Descontado', short: 'DCF',          color: '#a78bfa', weight: 0.25 },
-  nav:         { label: 'Valor Patrimonial Líquido', short: 'NAV',          color: '#34d399', weight: 0.05 },
-  replacement: { label: 'Custo de Reposição',        short: 'Reposição',    color: '#fbbf24', weight: 0.05 },
+  revenue: {
+    label: 'Múltiplo de Faturamento', short: 'Faturamento', color: '#22d3ee', weight: 0.30,
+    tip: 'Faturamento bruto × múltiplo (entre 1.5× e 8× conforme o setor). Útil quando a empresa ainda não tem lucro consolidado.',
+  },
+  ebitda: {
+    label: 'Múltiplo de EBITDA', short: 'EBITDA', color: '#8b5cf6', weight: 0.35,
+    tip: 'EBITDA × múltiplo setorial (entre 3× e 12×). É o método “rei” em transações de Fusões e Aquisições (M&A). +0.5× se a empresa tem mais de 3 anos.',
+  },
+  dcf: {
+    label: 'Fluxo de Caixa Descontado', short: 'DCF', color: '#a78bfa', weight: 0.25,
+    tip: 'Projeta o EBITDA por 5 anos crescendo à taxa esperada, e desconta tudo a valor presente usando o WACC. Reflete o valor de geração de caixa futura.',
+  },
+  nav: {
+    label: 'Valor Patrimonial Líquido', short: 'NAV', color: '#34d399', weight: 0.05,
+    tip: 'Ativos líquidos (caixa + equipamentos + recebíveis − dívidas). É o “valor de liquidação” — piso teórico do negócio.',
+  },
+  replacement: {
+    label: 'Custo de Reposição', short: 'Reposição', color: '#fbbf24', weight: 0.05,
+    tip: 'Quanto custaria recriar o negócio do zero hoje. Usamos 1.2× o investimento inicial como aproximação.',
+  },
 };

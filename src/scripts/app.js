@@ -11,7 +11,6 @@ import {
   initModalCloseHandlers,
   openModal,
   closeModal,
-  renderGlossary,
   renderScenarios,
   toast,
 } from './ui-helpers.js';
@@ -21,7 +20,11 @@ import { exportPDF, buildShareURL, readShareURL } from './export-pdf.js';
 const dashboard = new Dashboard({
   container: document.getElementById('results-container'),
   onSave: (inputs, params, calc) => {
-    const name = prompt('Nome para este cenário:', `Cenário ${new Date().toLocaleDateString('pt-BR')}`);
+    const today = new Date().toLocaleDateString('pt-BR');
+    const suggested = inputs.companyName
+      ? `${inputs.companyName} — ${today}`
+      : `Cenário ${today}`;
+    const name = prompt('Nome para este cenário:', suggested);
     if (!name) return;
     saveScenario({ inputs, params, calc, name });
     toast(`✓ Cenário "${name}" salvo`, { type: 'success' });
@@ -52,30 +55,27 @@ const wizard = new Wizard({
     dashboard.render(state);
   },
 });
+window.wizardInstance = wizard;
 
-// Modais e tema
+// Tooltips e tema
 initTooltips();
 initModalCloseHandlers();
 initThemeButton();
-renderGlossary();
 
-document.getElementById('btn-glossary').addEventListener('click', () => openModal('modal-glossary'));
 document.getElementById('btn-scenarios').addEventListener('click', () => {
   renderScenarios({
     onLoad: (scenario) => {
       closeModal('modal-scenarios');
-      wizard.loadState(scenario.inputs);
-      // Pula direto para resultados
-      wizard.current = 4;
-      wizard._render();
-      dashboard.render(scenario.inputs);
-      // Restaura params (WACC/growth do cenário)
+      // Compat: cenários antigos guardavam wacc/growth em scenario.params
+      const inputs = { ...scenario.inputs };
       if (scenario.params) {
-        dashboard.params = { ...dashboard.params, ...scenario.params };
-        dashboard._recalc();
-        dashboard._mount();
-        dashboard._initChart();
+        if (typeof scenario.params.wacc === 'number' && typeof inputs.wacc !== 'number') inputs.wacc = scenario.params.wacc;
+        if (typeof scenario.params.growth === 'number' && typeof inputs.growth !== 'number') inputs.growth = scenario.params.growth;
       }
+      wizard.loadState(inputs);
+      wizard.current = wizard.total;
+      wizard._render();
+      dashboard.render(inputs);
       toast(`Cenário "${scenario.name}" carregado`, { type: 'success' });
     },
     onDelete: () => toast('Cenário excluído', { type: 'info' }),
@@ -86,22 +86,16 @@ document.getElementById('btn-scenarios').addEventListener('click', () => {
 // Share URL — carrega estado se presente
 const shared = readShareURL();
 if (shared) {
-  const params = {};
-  if (typeof shared._w === 'number') params.wacc = shared._w;
-  if (typeof shared._g === 'number') params.growth = shared._g;
+  // Compat com URLs antigas: _w/_g viram state.wacc/state.growth
+  if (typeof shared._w === 'number') shared.wacc = shared._w;
+  if (typeof shared._g === 'number') shared.growth = shared._g;
   delete shared._w;
   delete shared._g;
 
   wizard.loadState(shared);
-  wizard.current = 4;
+  wizard.current = wizard.total;
   wizard._render();
   dashboard.render(shared);
-  if (Object.keys(params).length > 0) {
-    dashboard.params = { ...dashboard.params, ...params };
-    dashboard._recalc();
-    dashboard._mount();
-    dashboard._initChart();
-  }
   toast('Simulação carregada via link compartilhado', { type: 'info' });
 }
 

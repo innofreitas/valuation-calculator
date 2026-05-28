@@ -210,7 +210,7 @@ html.light select.input-base {
   padding-right: 1.5rem;
 }
 
-/* Tooltip */
+/* Tooltip icon (?) — substitui o glossário, próximo ao termo */
 .tooltip {
   display: inline-flex;
   align-items: center;
@@ -221,15 +221,27 @@ html.light select.input-base {
   border-radius: 50%;
   background: var(--surface);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 700;
   cursor: help;
   font-style: normal;
   vertical-align: middle;
   transition: all 0.2s;
+  border: 1px solid var(--border);
+  font-family: 'Inter', sans-serif;
+  user-select: none;
 }
 .tooltip:hover {
   background: rgba(34,211,238,0.15);
   color: #06b6d4;
+  border-color: rgba(6,182,212,0.4);
+}
+/* Substitui o ⓘ pelo "?" via pseudo-elemento, mantendo retrocompatibilidade do HTML */
+.tooltip { font-size: 0; }
+.tooltip::before {
+  content: "?";
+  font-size: 10px;
+  line-height: 1;
 }
 
 /* Modal */
@@ -437,6 +449,62 @@ html.light .sector-card.active {
 }
 html.light .sector-card .sector-meta span {
   background: rgba(15,23,42,0.05);
+}
+
+/* Custom preset panel inputs */
+.custom-input {
+  width: 70px;
+  padding: 6px 10px;
+  border-radius: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: center;
+}
+.custom-input:focus {
+  outline: none;
+  border-color: rgba(6,182,212,0.6);
+  background: var(--surface-strong);
+  box-shadow: 0 0 0 3px rgba(6,182,212,0.1);
+}
+.custom-input::-webkit-outer-spin-button,
+.custom-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.custom-input[type=number] { -moz-appearance: textfield; }
+
+.custom-action-btn {
+  padding: 6px 14px;
+  border-radius: 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-family: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.custom-action-btn:hover {
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.custom-action-btn.custom-action-primary {
+  background: linear-gradient(135deg, rgba(6,182,212,0.18), rgba(139,92,246,0.18));
+  border-color: rgba(6,182,212,0.4);
+  color: #67e8f9;
+}
+html.light .custom-action-btn.custom-action-primary {
+  background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(139,92,246,0.15));
+  color: #0e7490;
+}
+.custom-action-btn.custom-action-primary:hover {
+  filter: brightness(1.15);
+  border-color: rgba(6,182,212,0.6);
 }
 
 /* ============================================
